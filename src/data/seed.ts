@@ -18,7 +18,7 @@ import type {
   TelegramAudioItem,
   TwitterQuoteItem,
   YouTubeVideoItem,
-} from '../types';
+} from '../types.ts';
 
 export const POST_CATEGORIES = [
   'إيمانيات',

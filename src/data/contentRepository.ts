@@ -1,4 +1,4 @@
-import {CLASSIC_DAWAH_CARDS, INITIAL_VISITOR_REVIEWS, LIBRARY_PDF_BOOKS} from './dawahCards';
+import {CLASSIC_DAWAH_CARDS, INITIAL_VISITOR_REVIEWS, LIBRARY_PDF_BOOKS} from './dawahCards.ts';
 import {
   ADHKAR_ITEMS,
   ALILMIA_SECTIONS,
@@ -18,8 +18,8 @@ import {
   SENIOR_IMAMS_WORKS,
   SHEIKH_STUDENTS_WORKS,
   SH_YAHIA_SECTIONS,
-} from './seed';
-import type {DeafMuteVideoItem} from '../types';
+} from './seed.ts';
+import type {DeafMuteVideoItem} from '../types.ts';
 
 export interface DeafMuteVisualCard {
   id: string;

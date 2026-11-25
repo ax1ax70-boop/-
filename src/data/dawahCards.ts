@@ -1,4 +1,4 @@
-import type {ClassicDawahCard, PdfBookItem, VisitorReviewItem} from '../types';
+import type {ClassicDawahCard, PdfBookItem, VisitorReviewItem} from '../types.ts';
 
 export const CLASSIC_DAWAH_CARDS: ClassicDawahCard[] = [
   {
