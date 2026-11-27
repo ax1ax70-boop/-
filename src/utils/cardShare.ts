@@ -1,11 +1,85 @@
+import {generateQrDataUrl} from './qrCode';
+
 export interface CardRenderFallbackData {
   speakerLine: string;
   lines: Array<{text: string; color?: string}>;
   source: string;
   qrDataUrl?: string;
+  qrUrl?: string;
+  continuationNote?: string;
 }
 
-async function renderFallbackCardCanvas(data: CardRenderFallbackData): Promise<HTMLCanvasElement> {
+const LOGO_ASSET_PATH = '/assets/aistudio/d06af555-5476-4554-8f8c-0a58b8fa265e_c58761e4.webp';
+const FONT_FAMILY = '"Cairo", "Tajawal", "Amiri", sans-serif';
+
+async function loadImageSafe(src: string): Promise<HTMLImageElement | null> {
+  if (!src) return null;
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      if (!src.startsWith('data:')) {
+        i.crossOrigin = 'anonymous';
+      }
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('Image load failed'));
+      i.src = src;
+    });
+    if (typeof img.decode === 'function') {
+      try {
+        await img.decode();
+      } catch {
+        // Ignore decode warning if already loaded
+      }
+    }
+    return img;
+  } catch {
+    return null;
+  }
+}
+
+function wrapArabicText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (!clean) return [];
+  const words = clean.split(' ');
+  const wrapped: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth || !current) {
+      current = candidate;
+    } else {
+      wrapped.push(current);
+      current = word;
+    }
+  }
+  if (current) wrapped.push(current);
+  return wrapped;
+}
+
+function drawRoundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+async function renderHighResCardCanvas(data: CardRenderFallbackData): Promise<HTMLCanvasElement> {
   if (document.fonts?.ready) {
     try {
       await document.fonts.ready;
@@ -13,78 +87,200 @@ async function renderFallbackCardCanvas(data: CardRenderFallbackData): Promise<H
       // Ignore font readiness warning
     }
   }
-  const size = 1080;
+
+  const width = 1080;
+  const maxTextWidth = width - 160; // 920px safe content width
+
+  // Offscreen measurement context
+  const measureCanvas = document.createElement('canvas');
+  measureCanvas.width = width;
+  measureCanvas.height = 400;
+  const mCtx = measureCanvas.getContext('2d');
+  if (!mCtx) throw new Error('Canvas 2D unavailable');
+  mCtx.direction = 'rtl';
+
+  // Determine total text length to pick crisp readable typography
+  const rawTotalChars = data.lines.reduce((sum, l) => sum + (l.text || '').trim().length, 0);
+  const quoteFontSize = rawTotalChars <= 140 ? 50 : rawTotalChars <= 260 ? 42 : 36;
+  const quoteLineHeight = rawTotalChars <= 140 ? 80 : rawTotalChars <= 260 ? 68 : 60;
+
+  mCtx.font = `800 34px ${FONT_FAMILY}`;
+  const speakerLines = wrapArabicText(mCtx, data.speakerLine || '', maxTextWidth);
+  const speakerLineHeight = 52;
+
+  mCtx.font = `800 ${quoteFontSize}px ${FONT_FAMILY}`;
+  const wrappedQuoteLines: Array<{text: string; color: string}> = [];
+  for (const ln of data.lines) {
+    const subLines = wrapArabicText(mCtx, ln.text || '', maxTextWidth);
+    for (const sub of subLines) {
+      wrappedQuoteLines.push({text: sub, color: ln.color || '#111827'});
+    }
+  }
+
+  mCtx.font = `700 24px ${FONT_FAMILY}`;
+  const noteLines = data.continuationNote
+    ? wrapArabicText(mCtx, data.continuationNote, maxTextWidth)
+    : [];
+
+  mCtx.font = `700 25px ${FONT_FAMILY}`;
+  const sourceLines = wrapArabicText(mCtx, data.source || '', 500).slice(0, 2);
+
+  // Calculate dynamic non-clipping height (at least 1080px)
+  const topPad = 86;
+  const speakerBlockHeight = Math.max(1, speakerLines.length) * speakerLineHeight;
+  const gapAfterSpeaker = 58;
+  const quoteBlockHeight = Math.max(1, wrappedQuoteLines.length) * quoteLineHeight;
+  const noteBlockHeight = noteLines.length > 0 ? noteLines.length * 36 + 34 : 0;
+  const gapBeforeFooter = 58;
+  const footerHeight = 200;
+
+  const contentRequiredHeight =
+    topPad +
+    speakerBlockHeight +
+    gapAfterSpeaker +
+    quoteBlockHeight +
+    noteBlockHeight +
+    gapBeforeFooter +
+    footerHeight;
+
+  const height = Math.max(1080, Math.ceil(contentRequiredHeight));
+
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D unavailable');
 
+  // Card background & crisp outer border
   ctx.fillStyle = '#F8F9FA';
-  ctx.fillRect(0, 0, size, size);
+  ctx.fillRect(0, 0, width, height);
 
+  drawRoundedRectPath(ctx, 24, 24, width - 48, height - 48, 28);
+  ctx.fillStyle = '#F8F9FA';
+  ctx.fill();
   ctx.strokeStyle = '#E2E8F0';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(24, 24, size - 48, size - 48);
+  ctx.lineWidth = 3;
+  ctx.stroke();
 
   ctx.direction = 'rtl';
-  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // Top Speaker Line
+  // Top Speaker Lines
+  ctx.textAlign = 'center';
   ctx.fillStyle = '#111827';
-  ctx.font = '800 38px "Cairo", "Tajawal", "Amiri", sans-serif';
-  ctx.fillText(data.speakerLine, size / 2, 120, size - 140);
-
-  // Center Quote Lines
-  const lines = data.lines.slice(0, 6);
-  const lineSpacing = lines.length <= 3 ? 105 : 88;
-  const blockHeight = (lines.length - 1) * lineSpacing;
-  const startY = size / 2 - blockHeight / 2;
-
-  ctx.font = '800 58px "Cairo", "Tajawal", "Amiri", sans-serif';
-  lines.forEach((ln, idx) => {
-    ctx.fillStyle = ln.color || '#111827';
-    ctx.fillText(ln.text, size / 2, startY + idx * lineSpacing, size - 140);
+  ctx.font = `800 34px ${FONT_FAMILY}`;
+  speakerLines.forEach((line, idx) => {
+    ctx.fillText(line, width / 2, topPad + speakerLineHeight / 2 + idx * speakerLineHeight, maxTextWidth);
   });
 
+  // Vertically center Quote + Note inside the area between Speaker and Footer
+  const quoteAreaTop = topPad + speakerBlockHeight + gapAfterSpeaker;
+  const quoteAreaBottom = height - footerHeight - 28;
+  const totalInnerHeight = quoteBlockHeight + noteBlockHeight;
+  const innerStartY = Math.max(
+    quoteAreaTop,
+    quoteAreaTop + (quoteAreaBottom - quoteAreaTop - totalInnerHeight) / 2,
+  );
+
+  ctx.font = `800 ${quoteFontSize}px ${FONT_FAMILY}`;
+  wrappedQuoteLines.forEach((ln, idx) => {
+    ctx.fillStyle = ln.color;
+    ctx.fillText(
+      ln.text,
+      width / 2,
+      innerStartY + quoteLineHeight / 2 + idx * quoteLineHeight,
+      maxTextWidth,
+    );
+  });
+
+  if (noteLines.length > 0) {
+    ctx.fillStyle = '#006a46';
+    ctx.font = `700 24px ${FONT_FAMILY}`;
+    const noteStartY = innerStartY + quoteBlockHeight + 28;
+    noteLines.forEach((nl, idx) => {
+      ctx.fillText(nl, width / 2, noteStartY + idx * 34, maxTextWidth);
+    });
+  }
+
   // Footer divider
+  const dividerY = height - footerHeight;
   ctx.strokeStyle = '#E2E8F0';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(64, size - 150);
-  ctx.lineTo(size - 64, size - 150);
+  ctx.moveTo(64, dividerY);
+  ctx.lineTo(width - 64, dividerY);
   ctx.stroke();
 
-  // Right corner: Source
+  // Right corner: Source label (clean, no clipping)
   ctx.textAlign = 'right';
   ctx.fillStyle = '#111827';
-  ctx.font = '700 26px "Cairo", "Tajawal", "Amiri", sans-serif';
-  ctx.fillText(data.source, size - 64, size - 95, size - 420);
+  ctx.font = `700 25px ${FONT_FAMILY}`;
+  const sourceBaseY = sourceLines.length > 1 ? dividerY + 76 : dividerY + 96;
+  sourceLines.forEach((sl, idx) => {
+    ctx.fillText(sl, width - 64, sourceBaseY + idx * 38, 500);
+  });
 
-  // Left corner: Copyright + QR
-  const qrOffset = data.qrDataUrl ? 148 : 64;
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#4B5563';
-  ctx.font = '600 21px "Cairo", "Tajawal", "Amiri", sans-serif';
-  ctx.fillText('موقع مواعظ وعبر — جميع الحقوق محفوظة © 2027', qrOffset, size - 95, 420);
-
-  if (data.qrDataUrl) {
+  // Resolve QR Code image (use supplied qrDataUrl or generate from qrUrl)
+  let resolvedQrUrl = data.qrDataUrl || '';
+  if (!resolvedQrUrl && data.qrUrl) {
     try {
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const i = new Image();
-        i.crossOrigin = 'anonymous';
-        i.onload = () => resolve(i);
-        i.onerror = () => reject(new Error('QR image load failed'));
-        i.src = data.qrDataUrl!;
-      });
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(60, size - 134, 76, 76);
-      ctx.drawImage(img, 64, size - 130, 68, 68);
+      resolvedQrUrl = await generateQrDataUrl(data.qrUrl, 240);
     } catch {
-      // Proceed cleanly without QR if blocked
+      resolvedQrUrl = '';
     }
   }
+
+  // Left corner: ONE single QR Code + FULL uncropped Logo (NO copyright box)
+  const qrSize = 122;
+  const qrX = 64;
+  const qrY = dividerY + 34;
+
+  const [qrImg, logoImg] = await Promise.all([
+    loadImageSafe(resolvedQrUrl),
+    loadImageSafe(LOGO_ASSET_PATH),
+  ]);
+
+  if (qrImg) {
+    drawRoundedRectPath(ctx, qrX - 6, qrY - 6, qrSize + 12, qrSize + 12, 14);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+    ctx.strokeStyle = '#E2E8F0';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+  }
+
+  // Logo frame next to QR — draw FULL image aspect-ratio contained without cropping edges
+  const logoBoxSize = 96;
+  const logoBoxX = qrX + qrSize + 28;
+  const logoBoxY = qrY;
+
+  drawRoundedRectPath(ctx, logoBoxX, logoBoxY, logoBoxSize, logoBoxSize, 18);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fill();
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  if (logoImg) {
+    const natW = logoImg.naturalWidth || logoImg.width;
+    const natH = logoImg.naturalHeight || logoImg.height;
+    if (natW > 0 && natH > 0) {
+      const innerPad = 8;
+      const avail = logoBoxSize - innerPad * 2;
+      const scale = Math.min(avail / natW, avail / natH);
+      const drawW = natW * scale;
+      const drawH = natH * scale;
+      const drawX = logoBoxX + (logoBoxSize - drawW) / 2;
+      const drawY = logoBoxY + (logoBoxSize - drawH) / 2;
+      ctx.drawImage(logoImg, 0, 0, natW, natH, drawX, drawY, drawW, drawH);
+    }
+  }
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#006a46';
+  ctx.font = `800 20px ${FONT_FAMILY}`;
+  ctx.fillText('مَواعِظ وَعِبَر', logoBoxX + logoBoxSize / 2, logoBoxY + logoBoxSize + 22, 140);
 
   return canvas;
 }
@@ -115,47 +311,16 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
+/**
+ * Renders the Dawah Card directly on a high-DPI HTML5 2D Canvas so downloaded/shared
+ * PNG images are never fragmented, clipped, or affected by responsive DOM CSS / Tailwind oklch.
+ */
 export async function renderCardPngBlob(
-  element: HTMLElement | null,
+  _element: HTMLElement | null,
   fallbackData: CardRenderFallbackData,
 ): Promise<Blob> {
-  if (document.fonts?.ready) {
-    try {
-      await document.fonts.ready;
-    } catch {
-      // Ignore font load errors
-    }
-  }
-
-  if (element) {
-    try {
-      const {default: html2canvas} = await import('html2canvas');
-      const canvas = await html2canvas(element, {
-        backgroundColor: '#F8F9FA',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        onclone: (clonedDoc) => {
-          // Strip Tailwind oklch/color-mix styles from cloned root stylesheets if needed;
-          // elements inside the card use explicit inline hex colors.
-          const cardNodes = clonedDoc.querySelectorAll('[data-dawah-card="true"]');
-          cardNodes.forEach((node) => {
-            if (node instanceof HTMLElement) {
-              node.style.backgroundColor = '#F8F9FA';
-              node.style.borderColor = '#E2E8F0';
-              node.style.color = '#111827';
-            }
-          });
-        },
-      });
-      return await canvasToPngBlob(canvas);
-    } catch {
-      // Automatic fallback to pure HTML5 2D Canvas renderer (100% immune to CSS oklch)
-    }
-  }
-
-  const fallbackCanvas = await renderFallbackCardCanvas(fallbackData);
-  return await canvasToPngBlob(fallbackCanvas);
+  const canvas = await renderHighResCardCanvas(fallbackData);
+  return await canvasToPngBlob(canvas);
 }
 
 export function triggerBlobDownload(blob: Blob, fileName: string): void {
@@ -243,7 +408,7 @@ export async function shareDawahCardSafely(params: {
       if (err instanceof Error && err.name === 'AbortError') {
         return;
       }
-      // Browser/iframe blocked Web Share API — do NOT throw or show error; fall back cleanly!
+      // Browser/iframe blocked Web Share API — fall back cleanly
     }
   }
 

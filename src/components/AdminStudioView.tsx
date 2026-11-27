@@ -64,9 +64,12 @@ import type {
   AppIcons,
   AutomationSettings,
   CardTheme,
+  ClassicDawahCard,
   ColorScheme,
+  ContentApprovalRequest,
   CustomAdhkarItem,
   CustomBookItem,
+  DawahCardsMeta,
   DeafMuteRoomSnapshot,
   DeafMuteVideoItem,
   EmblemVariant,
@@ -78,6 +81,7 @@ import type {
   MotherOasisChapter,
   MotherOasisItem,
   NafahatMeta,
+  PoetryAnecdoteItem,
   Post,
   SadaMaterialItem,
   SadaScholarProfile,
@@ -97,6 +101,7 @@ import {
   cloudDeletePost,
   cloudDeleteSadaMaterial,
   cloudSaveSiteSettings,
+  cloudUpsertAiDawahCard,
   cloudUpsertCustomAdhkar,
   cloudUpsertCustomBook,
   cloudUpsertDeafMuteVideo,
@@ -117,6 +122,7 @@ import {
   hasMeetAccessToken,
   initMeetOAuthObserver,
 } from '../utils/googleMeetOAuth';
+import {getPublicSiteUrl} from '../utils/storage';
 import {
   BrandEmblem,
   COLOR_SCHEME_STYLES,
@@ -126,8 +132,6 @@ import {
 } from './BrandEmblem';
 import {AdminAnalyticsPanel} from './AdminAnalyticsPanel';
 import {AdminMessagesPanel} from './AdminMessagesPanel';
-import {LiveStatsStrip} from './LiveStatsStrip';
-import {PWAInstallButton} from './PWAInstallButton';
 
 const ICON_SLOT_LABELS: Array<{key: keyof Omit<AppIcons, 'brandEmblem'>; label: string}> = [
   {key: 'home', label: 'أيقونة تبويب الرئيسية'},
@@ -146,6 +150,8 @@ const ICON_SLOT_LABELS: Array<{key: keyof Omit<AppIcons, 'brandEmblem'>; label: 
 
 export type AdminStudioTab =
   | 'studio'
+  | 'dawah-cards'
+  | 'approvals'
   | 'sada-alkhair'
   | 'comments'
   | 'messages'
@@ -166,10 +172,10 @@ const ADMIN_PERMISSION_LABELS: Array<{id: AdminPermission; label: string}> = [
   {id: 'manage_sada', label: 'إدارة خدمة صدى الخير الدعوية'},
   {id: 'manage_comments', label: 'مراقبة وتعديل تعليقات الزوار'},
   {id: 'manage_fatawa', label: 'إضافة وحذف الفتاوى'},
-  {id: 'manage_mother_oasis', label: 'إدارة واحة الداعية أمي'},
+  {id: 'manage_mother_oasis', label: 'إدارة واحة وقصص الوالدة (أم محمد)'},
   {id: 'manage_deaf_mute', label: 'إدارة فيديوهات وغرفة الصم والبكم'},
   {id: 'manage_adhkar_books', label: 'إضافة الأذكار والكتب العلمية'},
-  {id: 'manage_tickets', label: 'متابعة رسائل وتذاكر الزوار (#REQ)'},
+  {id: 'manage_tickets', label: 'متابعة رسائل وتذاكر الزوار'},
   {id: 'manage_live_support', label: 'الدردشة الحية وروابط Meet'},
   {id: 'manage_accounts', label: 'إدارة الحسابات والصلاحيات'},
   {id: 'manage_settings', label: 'إعدادات المظهر والأمان والروابط'},
@@ -240,9 +246,11 @@ export function AdminStudioView({
   siteAppearance = DEFAULT_APPEARANCE_LOCAL,
   automationSettings = DEFAULT_AUTOMATION_LOCAL,
   nafahatMeta,
+  dawahCardsMeta,
   visitorsCount = 0,
   onlineVisitorsCount = 1,
   clicksCount = 0,
+  registeredMembersCount = 0,
   onPublishPost,
   onUpdatePost,
   onDeletePost,
@@ -259,6 +267,7 @@ export function AdminStudioView({
   onUpdateSettings,
   onSaveCustomization,
   onRefreshNafahatAI,
+  onRefreshDawahCardsAI,
   onResetCounters,
   onImportState,
   onUpdateMessages,
@@ -272,6 +281,11 @@ export function AdminStudioView({
   onCustomBooksChange,
   sadaMaterials = [],
   onSadaMaterialsChange,
+  aiDawahCards = [],
+  onAiDawahCardsChange,
+  onDawahCardsMetaChange,
+  poetryItems = [],
+  onPoetryItemsChange,
   meetConfig,
   onMeetConfigChange,
   onPreviewSite,
@@ -298,9 +312,11 @@ export function AdminStudioView({
   siteAppearance?: SiteAppearanceConfig;
   automationSettings?: AutomationSettings;
   nafahatMeta?: NafahatMeta;
+  dawahCardsMeta?: DawahCardsMeta;
   visitorsCount?: number;
   onlineVisitorsCount?: number;
   clicksCount?: number;
+  registeredMembersCount?: number;
   onPublishPost: (post: Post) => void;
   onUpdatePost: (post: Post) => void;
   onDeletePost: (id: string) => void;
@@ -321,10 +337,22 @@ export function AdminStudioView({
     appIcons: AppIcons;
   }) => Promise<void>;
   onRefreshNafahatAI?: () => Promise<{ok: boolean; message: string}>;
-  onResetCounters: (posts: Post[], motherPrayersCount: number) => void;
+  onRefreshDawahCardsAI?: () => Promise<{ok: boolean; message: string}>;
+  onResetCounters: (
+    posts: Post[],
+    motherPrayersCount: number,
+    visitorsCount?: number,
+    clicksCount?: number,
+  ) => void;
   onImportState: (payload: {
     posts?: Post[];
     fatawa?: FatwaItem[];
+    poetryItems?: PoetryAnecdoteItem[];
+    aiDawahCards?: ClassicDawahCard[];
+    dawahCardsMeta?: DawahCardsMeta;
+    visitorsCount?: number;
+    clicksCount?: number;
+    registeredMembersCount?: number;
     socialLinks?: SocialLink[];
     appIcons?: AppIcons;
     siteConfig?: SiteConfig;
@@ -342,6 +370,11 @@ export function AdminStudioView({
   onCustomBooksChange?: (items: CustomBookItem[]) => void;
   sadaMaterials?: SadaMaterialItem[];
   onSadaMaterialsChange?: (items: SadaMaterialItem[]) => void;
+  aiDawahCards?: ClassicDawahCard[];
+  onAiDawahCardsChange?: (cards: ClassicDawahCard[]) => void;
+  onDawahCardsMetaChange?: (meta: DawahCardsMeta) => void;
+  poetryItems?: PoetryAnecdoteItem[];
+  onPoetryItemsChange?: (items: PoetryAnecdoteItem[]) => void;
   meetConfig?: AdminMeetConfig;
   onMeetConfigChange?: (cfg: AdminMeetConfig) => void;
   onPreviewSite?: () => void;
@@ -452,6 +485,21 @@ export function AdminStudioView({
   const [analyticsRefreshKey, setAnalyticsRefreshKey] = useState(0);
   const [refreshingAI, setRefreshingAI] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<{ok: boolean; text: string} | null>(null);
+  const [refreshingCardsAI, setRefreshingCardsAI] = useState(false);
+  const [aiCardsFeedback, setAiCardsFeedback] = useState<{ok: boolean; text: string} | null>(null);
+
+  // Manual Dawah Card / Verified Hadith Composer State
+  const [cardSpeakerInput, setCardSpeakerInput] = useState('');
+  const [cardCategoryInput, setCardCategoryInput] = useState('أحاديث نبوية صحيحة');
+  const [cardLinesInput, setCardLinesInput] = useState('');
+  const [cardSourceInput, setCardSourceInput] = useState('');
+  const [cardSaving, setCardSaving] = useState(false);
+
+  // Content Approval Queue State (Primary Admin approves/rejects Supervisor edits)
+  const [pendingApprovals, setPendingApprovals] = useState<ContentApprovalRequest[]>([]);
+  const [loadingApprovals, setLoadingApprovals] = useState(false);
+  const [processingApprovalId, setProcessingApprovalId] = useState<string | null>(null);
+  const [approvalNoteById, setApprovalNoteById] = useState<Record<string, string>>({});
 
   // Firebase Cloud Sync State
   const [cloudUserEmail, setCloudUserEmail] = useState<string | null>(null);
@@ -550,6 +598,7 @@ export function AdminStudioView({
   const [savingAppearance, setSavingAppearance] = useState(false);
 
   // Mother Oasis Composer + Zero-Audio-Storage Dictation / Transcription State
+  const [editingOasisId, setEditingOasisId] = useState<string | null>(null);
   const [oasisChapter, setOasisChapter] = useState<MotherOasisChapter>('books');
   const [oasisTitle, setOasisTitle] = useState('');
   const [oasisBody, setOasisBody] = useState('');
@@ -574,6 +623,84 @@ export function AdminStudioView({
   const authHeaders = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${authToken}`,
+  };
+
+  type AiSectionKey = 'post' | 'story' | 'sada' | 'fatwa' | 'mother-oasis' | 'adhkar' | 'book' | 'deaf-mute';
+  const [aiGenBusySection, setAiGenBusySection] = useState<AiSectionKey | null>(null);
+  const [aiGenTopicInput, setAiGenTopicInput] = useState('');
+
+  const handleAiGenerateSection = async (
+    section: AiSectionKey,
+    topicOverride?: string,
+    subOptionOverride?: string,
+  ) => {
+    if (aiGenBusySection) return;
+    setAiGenBusySection(section);
+    try {
+      const res = await fetch('/api/admin/ai-generate', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          section,
+          topic: (topicOverride ?? aiGenTopicInput).trim(),
+          subOption: subOptionOverride || '',
+        }),
+      });
+      const data = (await res.json()) as {draft?: Record<string, unknown>; error?: string};
+      if (!res.ok || !data.draft) {
+        onNotify(data.error || 'تعذر توليد المسودة بالذكاء الاصطناعي حالياً');
+        return;
+      }
+      const d = data.draft;
+      if (section === 'post' || section === 'story') {
+        if (typeof d.title === 'string') setTitle(d.title);
+        if (typeof d.author === 'string') setAuthor(d.author);
+        if (typeof d.category === 'string') {
+          setCategory(section === 'story' ? 'قصص وعبر' : d.category);
+        } else if (section === 'story') {
+          setCategory('قصص وعبر');
+        }
+        if (typeof d.body === 'string') setBody(d.body);
+        onNotify('تم توليد المسودة بالذكاء الاصطناعي — راجعها أو عدّلها يدوياً ثم انقر نشر');
+      } else if (section === 'sada') {
+        if (typeof d.title === 'string') setSadaTitle(d.title);
+        if (typeof d.category === 'string') setSadaCategory(d.category);
+        if (typeof d.body === 'string') setSadaBody(d.body);
+        onNotify('تم إعداد مادة صدى الخير بالذكاء الاصطناعي — جاهزة للمراجعة والنشر');
+      } else if (section === 'fatwa') {
+        if (typeof d.category === 'string') setFatwaCategory(d.category);
+        if (typeof d.question === 'string') setFatwaQuestion(d.question);
+        if (typeof d.answer === 'string') setFatwaAnswer(d.answer);
+        if (typeof d.source === 'string') setFatwaSource(d.source);
+        onNotify('تم إعداد مسودة الفتوى بالذكاء الاصطناعي — راجع التوثيق ثم انقر إضافة');
+      } else if (section === 'mother-oasis') {
+        if (typeof d.title === 'string') setOasisTitle(d.title);
+        if (typeof d.body === 'string') setOasisBody(d.body);
+        onNotify('تمت صياغة المسودة في واحة الوالدة — يمكنك تعديلها يدوياً ثم اعتماد النشر');
+      } else if (section === 'adhkar') {
+        if (typeof d.title === 'string') setAdhkarTitle(d.title);
+        if (typeof d.text === 'string') setAdhkarText(d.text);
+        if (typeof d.fadl === 'string') setAdhkarFadl(d.fadl);
+        if (typeof d.targetCount === 'number' && d.targetCount >= 1) setAdhkarCount(d.targetCount);
+        onNotify('تم اقتراح الذكر وتخريجه — راجعه ثم انقر إضافة');
+      } else if (section === 'book') {
+        if (typeof d.title === 'string') setBookTitle(d.title);
+        if (typeof d.author === 'string') setBookAuthor(d.author);
+        if (typeof d.category === 'string') setBookCategory(d.category);
+        if (typeof d.summary === 'string') setBookSummary(d.summary);
+        onNotify('تم اقتراح بطاقة الكتاب — أضف رابط PDF أو اتركها قريباً ثم احفظ');
+      } else if (section === 'deaf-mute') {
+        if (typeof d.title === 'string') setDmTitle(d.title);
+        if (typeof d.category === 'string') setDmCategory(d.category);
+        if (typeof d.description === 'string') setDmDesc(d.description);
+        if (typeof d.benefitText === 'string') setDmBenefit(d.benefitText);
+        onNotify('تم إعداد وصف الدرس البصري بالذكاء الاصطناعي — يمكنك تعديله وإضافة رابط يوتيوب');
+      }
+    } catch {
+      onNotify('تعذر الاتصال بالخادم للتوليد الذكي');
+    } finally {
+      setAiGenBusySection(null);
+    }
   };
 
   // Primary Admin ONLY: Registered Visitors Directory (Name, Email, Mobile/WhatsApp)
@@ -633,10 +760,29 @@ export function AdminStudioView({
     }
   }, [isPrimaryAdmin, authToken]);
 
+  const loadApprovals = useCallback(async () => {
+    if (!authToken) return;
+    setLoadingApprovals(true);
+    try {
+      const res = await fetch('/api/admin/approvals', {
+        headers: {Authorization: `Bearer ${authToken}`},
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as {approvals?: ContentApprovalRequest[]};
+      if (Array.isArray(data.approvals)) setPendingApprovals(data.approvals);
+    } catch {
+      // Ignore offline fetch failure
+    } finally {
+      setLoadingApprovals(false);
+    }
+  }, [authToken]);
+
   useEffect(() => {
     void loadAccounts();
     void loadRegisteredVisitors();
-  }, [loadAccounts, loadRegisteredVisitors]);
+    void loadApprovals();
+  }, [loadAccounts, loadRegisteredVisitors, loadApprovals]);
 
   const resetComposer = () => {
     setEditingPostId(null);
@@ -706,7 +852,7 @@ export function AdminStudioView({
   };
 
   const formatBroadcastText = (post: Post) =>
-    `✨ *${post.title}*\n\n${post.body}\n\n— ${post.author}\n\n📚 ${siteConfig.appName} (${brandHandle})\n🌐 ${window.location.origin}${post.youtubeUrl ? `\n🎬 ${post.youtubeUrl}` : ''}`;
+    `✨ *${post.title}*\n\n${post.body}\n\n— ${post.author}\n\n📚 ${siteConfig.appName} (${brandHandle})\n🌐 ${getPublicSiteUrl('/?tab=home')}${post.youtubeUrl ? `\n🎬 ${post.youtubeUrl}` : ''}`;
 
   const triggerMultiSiteBroadcast = async (post: Post) => {
     const formatted = formatBroadcastText(post);
@@ -742,8 +888,19 @@ export function AdminStudioView({
             youtubeUrl: youtubeUrl.trim() || undefined,
           }),
         });
-        if (!res.ok) throw new Error();
-        const data = (await res.json()) as {post: Post};
+        const data = (await res.json()) as {
+          post?: Post;
+          requiresApproval?: boolean;
+          message?: string;
+          error?: string;
+        };
+        if (res.status === 202 || data.requiresApproval) {
+          resetComposer();
+          void loadApprovals();
+          onNotify(data.message || 'تم إرسال التعديل إلى المسؤول الأول للموافقة قبل نشره للزوار.');
+          return;
+        }
+        if (!res.ok || !data.post) throw new Error(data.error || 'failed');
         onUpdatePost(data.post);
         void cloudUpsertPost(data.post).catch(() => undefined);
         resetComposer();
@@ -769,8 +926,19 @@ export function AdminStudioView({
             syncedPlatforms: targetPlatforms,
           }),
         });
-        if (!res.ok) throw new Error();
-        const data = (await res.json()) as {post: Post};
+        const data = (await res.json()) as {
+          post?: Post;
+          requiresApproval?: boolean;
+          message?: string;
+          error?: string;
+        };
+        if (res.status === 202 || data.requiresApproval) {
+          resetComposer();
+          void loadApprovals();
+          onNotify(data.message || 'تم إرسال المحتوى إلى المسؤول الأول للموافقة قبل نشره للزوار.');
+          return;
+        }
+        if (!res.ok || !data.post) throw new Error(data.error || 'failed');
         onPublishPost(data.post);
         void cloudUpsertPost(data.post).catch(() => undefined);
         resetComposer();
@@ -793,7 +961,13 @@ export function AdminStudioView({
         method: 'DELETE',
         headers: authHeaders,
       });
-      if (!res.ok) throw new Error();
+      const data = (await res.json()) as {requiresApproval?: boolean; message?: string; error?: string};
+      if (res.status === 202 || data.requiresApproval) {
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال طلب الحذف إلى المسؤول الأول للموافقة.');
+        return;
+      }
+      if (!res.ok) throw new Error(data.error || 'failed');
       onDeletePost(id);
       void cloudDeletePost(id).catch(() => undefined);
       if (editingPostId === id) resetComposer();
@@ -822,8 +996,21 @@ export function AdminStudioView({
           featured: fatwaScholarId === 'hajouri',
         }),
       });
-      if (!res.ok) throw new Error();
-      const data = (await res.json()) as {fatwa: FatwaItem};
+      const data = (await res.json()) as {
+        fatwa?: FatwaItem;
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        setFatwaQuestion('');
+        setFatwaAnswer('');
+        setFatwaSource('');
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال الفتوى إلى المسؤول الأول للموافقة قبل نشرها.');
+        return;
+      }
+      if (!res.ok || !data.fatwa) throw new Error(data.error || 'failed');
       onAddFatwa(data.fatwa);
       void cloudUpsertFatwa(data.fatwa).catch(() => undefined);
       setFatwaQuestion('');
@@ -843,7 +1030,13 @@ export function AdminStudioView({
         method: 'DELETE',
         headers: authHeaders,
       });
-      if (!res.ok) throw new Error();
+      const data = (await res.json()) as {requiresApproval?: boolean; message?: string; error?: string};
+      if (res.status === 202 || data.requiresApproval) {
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال طلب حذف الفتوى إلى المسؤول الأول للموافقة.');
+        return;
+      }
+      if (!res.ok) throw new Error(data.error || 'failed');
       onDeleteFatwa(id);
       void cloudDeleteFatwa(id).catch(() => undefined);
       onNotify('تم حذف الفتوى بنجاح');
@@ -1090,10 +1283,15 @@ export function AdminStudioView({
         headers: authHeaders,
       });
       if (!res.ok) throw new Error();
-      const data = (await res.json()) as {posts: Post[]; motherPrayersCount: number};
-      onResetCounters(data.posts, data.motherPrayersCount);
+      const data = (await res.json()) as {
+        posts: Post[];
+        motherPrayersCount: number;
+        visitorsCount?: number;
+        clicksCount?: number;
+      };
+      onResetCounters(data.posts, data.motherPrayersCount, data.visitorsCount, data.clicksCount);
       setAnalyticsRefreshKey((k) => k + 1);
-      onNotify('تم تصفير جميع عدادات الإعجابات والتعليقات والدعاء والانتشار إلى ٠');
+      onNotify('تم تصفير عدادات الإعجابات والتعليقات والرسوم اليومية مع حفظ العداد التصاعدي');
     } catch {
       onNotify('تعذر تصفير العدادات');
     } finally {
@@ -1151,6 +1349,8 @@ export function AdminStudioView({
 
   const totalCommentsCount = posts.reduce((acc, p) => acc + (p.comments?.length || 0), 0);
 
+  const pendingApprovalsCount = pendingApprovals.filter((a) => a.status === 'pending').length;
+
   const allTabs: Array<{
     id: AdminStudioTab;
     label: string;
@@ -1159,8 +1359,24 @@ export function AdminStudioView({
     scope?: AdminSectionScope;
     permission?: AdminPermission;
     primaryOnly?: boolean;
+    alwaysVisible?: boolean;
   }> = [
-    {id: 'studio', label: 'المواعظ والمنشورات', Icon: Send, scope: 'posts', permission: 'manage_posts'},
+    {id: 'studio', label: 'المواعظ والقصص والمنشورات', Icon: Send, scope: 'posts', permission: 'manage_posts'},
+    {
+      id: 'dawah-cards',
+      label: 'البطاقات الدعوية والأحاديث',
+      Icon: Sparkles,
+      badge: aiDawahCards.length > 0 ? aiDawahCards.length : undefined,
+      scope: 'posts',
+      permission: 'manage_posts',
+    },
+    {
+      id: 'approvals',
+      label: isPrimaryAdmin ? 'اعتماد تعديلات المشرفين' : 'حالة طلبات الموافقة',
+      Icon: CheckCircle2,
+      badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined,
+      alwaysVisible: true,
+    },
     {
       id: 'sada-alkhair',
       label: 'خدمة صدى الخير الدعوية',
@@ -1230,7 +1446,7 @@ export function AdminStudioView({
   ];
 
   const visibleTabs = allTabs.filter((t) => {
-    if (isPrimaryAdmin) return true;
+    if (isPrimaryAdmin || t.alwaysVisible) return true;
     if (t.primaryOnly) return false;
     if (t.permission && resolvedPermissions.includes(t.permission)) return true;
     if (assignedSection === 'all') return true;
@@ -1392,6 +1608,20 @@ export function AdminStudioView({
     }
   };
 
+  const startEditMotherOasis = (item: MotherOasisItem) => {
+    setEditingOasisId(item.id);
+    setOasisChapter(item.chapter);
+    setOasisTitle(item.title);
+    setOasisBody(item.body);
+    setTab('mother-oasis');
+  };
+
+  const resetMotherOasisForm = () => {
+    setEditingOasisId(null);
+    setOasisTitle('');
+    setOasisBody('');
+  };
+
   const handlePublishMotherOasis = async () => {
     if (!oasisTitle.trim() || !oasisBody.trim()) {
       onNotify('يرجى كتابة العنوان والنص أولاً قبل النشر في واحة أمي.');
@@ -1399,8 +1629,12 @@ export function AdminStudioView({
     }
     setOasisSaving(true);
     try {
-      const res = await fetch('/api/admin/mother-oasis', {
-        method: 'POST',
+      const endpoint = editingOasisId
+        ? `/api/admin/mother-oasis/${encodeURIComponent(editingOasisId)}`
+        : '/api/admin/mother-oasis';
+      const method = editingOasisId ? 'PUT' : 'POST';
+      const res = await fetch(endpoint, {
+        method,
         headers: authHeaders,
         body: JSON.stringify({
           chapter: oasisChapter,
@@ -1408,17 +1642,34 @@ export function AdminStudioView({
           body: oasisBody.trim(),
         }),
       });
-      const data = (await res.json()) as {items?: MotherOasisItem[]; error?: string};
+      const data = (await res.json()) as {
+        items?: MotherOasisItem[];
+        created?: MotherOasisItem;
+        updated?: MotherOasisItem;
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        resetMotherOasisForm();
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال المادة إلى المسؤول الأول للموافقة قبل نشرها.');
+        return;
+      }
       if (!res.ok || !Array.isArray(data.items)) {
         onNotify(data.error || 'تعذر نشر المادة في واحة الداعية أمي.');
         return;
       }
-      const newest = data.items[0];
-      if (newest) void cloudUpsertMotherOasis(newest).catch(() => undefined);
+      const saved = data.updated || data.created || data.items[0];
+      if (saved) void cloudUpsertMotherOasis(saved).catch(() => undefined);
       onMotherOasisChange?.(data.items);
-      setOasisTitle('');
-      setOasisBody('');
-      onNotify('تم النشر النصي بنجاح في «واحة الداعية الفاضلة أمي: أم محمد إكرام عبده علي».');
+      const wasEditing = Boolean(editingOasisId);
+      resetMotherOasisForm();
+      onNotify(
+        wasEditing
+          ? 'تم تحديث المادة بنجاح في «واحة وقصص الوالدة: أم محمد».'
+          : 'تم النشر النصي بنجاح في «واحة وقصص الوالدة: أم محمد».',
+      );
     } catch {
       onNotify('تعذر الاتصال بالخادم لحفظ المادة.');
     } finally {
@@ -1432,13 +1683,24 @@ export function AdminStudioView({
         method: 'DELETE',
         headers: {Authorization: `Bearer ${authToken}`},
       });
-      const data = (await res.json()) as {items?: MotherOasisItem[]; error?: string};
+      const data = (await res.json()) as {
+        items?: MotherOasisItem[];
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال طلب الحذف إلى المسؤول الأول للموافقة.');
+        return;
+      }
       if (!res.ok || !Array.isArray(data.items)) {
         onNotify(data.error || 'تعذر حذف المادة.');
         return;
       }
       onMotherOasisChange?.(data.items);
       void cloudDeleteMotherOasis(id).catch(() => undefined);
+      if (editingOasisId === id) resetMotherOasisForm();
       onNotify('تم حذف المادة من واحة الداعية أمي.');
     } catch {
       onNotify('تعذر الحذف حالياً.');
@@ -1485,8 +1747,16 @@ export function AdminStudioView({
         items?: SadaMaterialItem[];
         created?: SadaMaterialItem;
         updated?: SadaMaterialItem;
+        requiresApproval?: boolean;
+        message?: string;
         error?: string;
       };
+      if (res.status === 202 || data.requiresApproval) {
+        resetSadaForm();
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال المادة إلى المسؤول الأول للموافقة قبل نشرها.');
+        return;
+      }
       if (!res.ok || !Array.isArray(data.items)) {
         onNotify(data.error || 'تعذر حفظ المادة في خدمة صدى الخير');
         return;
@@ -1513,7 +1783,17 @@ export function AdminStudioView({
         method: 'DELETE',
         headers: {Authorization: `Bearer ${authToken}`},
       });
-      const data = (await res.json()) as {items?: SadaMaterialItem[]; error?: string};
+      const data = (await res.json()) as {
+        items?: SadaMaterialItem[];
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال طلب الحذف إلى المسؤول الأول للموافقة.');
+        return;
+      }
       if (!res.ok || !Array.isArray(data.items)) {
         onNotify(data.error || 'تعذر حذف المادة');
         return;
@@ -1574,8 +1854,16 @@ export function AdminStudioView({
         items?: DeafMuteVideoItem[];
         created?: DeafMuteVideoItem;
         updated?: DeafMuteVideoItem;
+        requiresApproval?: boolean;
+        message?: string;
         error?: string;
       };
+      if (res.status === 202 || data.requiresApproval) {
+        resetDeafMuteForm();
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال مادة الصم والبكم إلى المسؤول الأول للموافقة.');
+        return;
+      }
       if (!res.ok || !Array.isArray(data.items)) {
         onNotify(data.error || 'تعذر حفظ فيديو قسم الصم والبكم');
         return;
@@ -1602,12 +1890,24 @@ export function AdminStudioView({
         method: 'DELETE',
         headers: {Authorization: `Bearer ${authToken}`},
       });
-      const data = (await res.json()) as {items?: DeafMuteVideoItem[]};
+      const data = (await res.json()) as {
+        items?: DeafMuteVideoItem[];
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال طلب الحذف إلى المسؤول الأول للموافقة.');
+        return;
+      }
       if (res.ok && Array.isArray(data.items)) {
         onDeafMuteVideosChange?.(data.items);
         void cloudDeleteDeafMuteVideo(id).catch(() => undefined);
         if (editingDmId === id) resetDeafMuteForm();
         onNotify('تم حذف الفيديو من قسم الصم والبكم');
+      } else {
+        onNotify(data.error || 'تعذر حذف الفيديو');
       }
     } catch {
       onNotify('تعذر حذف الفيديو');
@@ -1632,7 +1932,22 @@ export function AdminStudioView({
           targetCount: adhkarCount,
         }),
       });
-      const data = (await res.json()) as {items?: CustomAdhkarItem[]; created?: CustomAdhkarItem; error?: string};
+      const data = (await res.json()) as {
+        items?: CustomAdhkarItem[];
+        created?: CustomAdhkarItem;
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        setAdhkarTitle('');
+        setAdhkarText('');
+        setAdhkarFadl('');
+        setAdhkarCount(1);
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال الذكر إلى المسؤول الأول للموافقة.');
+        return;
+      }
       if (!res.ok || !Array.isArray(data.items)) {
         onNotify(data.error || 'تعذر حفظ الذكر');
         return;
@@ -1657,11 +1972,23 @@ export function AdminStudioView({
         method: 'DELETE',
         headers: {Authorization: `Bearer ${authToken}`},
       });
-      const data = (await res.json()) as {items?: CustomAdhkarItem[]};
+      const data = (await res.json()) as {
+        items?: CustomAdhkarItem[];
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال طلب الحذف إلى المسؤول الأول للموافقة.');
+        return;
+      }
       if (res.ok && Array.isArray(data.items)) {
         onCustomAdhkarChange?.(data.items);
         void cloudDeleteCustomAdhkar(id).catch(() => undefined);
         onNotify('تم حذف الذكر المخصص');
+      } else {
+        onNotify(data.error || 'تعذر حذف الذكر');
       }
     } catch {
       onNotify('تعذر حذف الذكر');
@@ -1687,7 +2014,22 @@ export function AdminStudioView({
           pdfUrl: bookPdfUrl.trim() || 'coming_soon',
         }),
       });
-      const data = (await res.json()) as {items?: CustomBookItem[]; created?: CustomBookItem; error?: string};
+      const data = (await res.json()) as {
+        items?: CustomBookItem[];
+        created?: CustomBookItem;
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        setBookTitle('');
+        setBookAuthor('');
+        setBookSummary('');
+        setBookPdfUrl('coming_soon');
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال الكتاب إلى المسؤول الأول للموافقة.');
+        return;
+      }
       if (!res.ok || !Array.isArray(data.items)) {
         onNotify(data.error || 'تعذر حفظ الكتاب');
         return;
@@ -1712,14 +2054,220 @@ export function AdminStudioView({
         method: 'DELETE',
         headers: {Authorization: `Bearer ${authToken}`},
       });
-      const data = (await res.json()) as {items?: CustomBookItem[]};
+      const data = (await res.json()) as {
+        items?: CustomBookItem[];
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال طلب الحذف إلى المسؤول الأول للموافقة.');
+        return;
+      }
       if (res.ok && Array.isArray(data.items)) {
         onCustomBooksChange?.(data.items);
         void cloudDeleteCustomBook(id).catch(() => undefined);
         onNotify('تم حذف الكتاب من القائمة');
+      } else {
+        onNotify(data.error || 'تعذر حذف الكتاب');
       }
     } catch {
       onNotify('تعذر حذف الكتاب');
+    }
+  };
+
+  const handleSaveManualDawahCard = async () => {
+    if (!cardSpeakerInput.trim() || !cardLinesInput.trim()) {
+      onNotify('يرجى إدخال عنوان/القائل ونص البطاقة أو الحديث أولاً');
+      return;
+    }
+    setCardSaving(true);
+    try {
+      const res = await fetch('/api/admin/dawah-cards', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          speakerLine: cardSpeakerInput.trim(),
+          category: cardCategoryInput,
+          lines: cardLinesInput.trim(),
+          source: cardSourceInput.trim() || undefined,
+        }),
+      });
+      const data = (await res.json()) as {
+        card?: ClassicDawahCard;
+        aiDawahCards?: ClassicDawahCard[];
+        dawahCardsMeta?: DawahCardsMeta;
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        setCardSpeakerInput('');
+        setCardLinesInput('');
+        setCardSourceInput('');
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال البطاقة الدعوية للمسؤول الأول للموافقة قبل نشرها.');
+        return;
+      }
+      if (!res.ok) {
+        onNotify(data.error || 'تعذر إضافة البطاقة الدعوية');
+        return;
+      }
+      if (Array.isArray(data.aiDawahCards)) onAiDawahCardsChange?.(data.aiDawahCards);
+      if (data.dawahCardsMeta) onDawahCardsMetaChange?.(data.dawahCardsMeta);
+      if (data.card) void cloudUpsertAiDawahCard(data.card).catch(() => undefined);
+      setCardSpeakerInput('');
+      setCardLinesInput('');
+      setCardSourceInput('');
+      onNotify('تم نشر البطاقة الدعوية / الحديث الصحيح للزوار بنجاح');
+    } catch {
+      onNotify('تعذر الاتصال بالخادم لحفظ البطاقة');
+    } finally {
+      setCardSaving(false);
+    }
+  };
+
+  const handleDeleteDawahCard = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/dawah-cards/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: {Authorization: `Bearer ${authToken}`},
+      });
+      const data = (await res.json()) as {
+        aiDawahCards?: ClassicDawahCard[];
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        void loadApprovals();
+        onNotify(data.message || 'تم إرسال طلب حذف البطاقة للمسؤول الأول للموافقة.');
+        return;
+      }
+      if (!res.ok) {
+        onNotify(data.error || 'تعذر حذف البطاقة');
+        return;
+      }
+      if (Array.isArray(data.aiDawahCards)) onAiDawahCardsChange?.(data.aiDawahCards);
+      onNotify('تم حذف البطاقة الدعوية بنجاح');
+    } catch {
+      onNotify('تعذر حذف البطاقة حالياً');
+    }
+  };
+
+  const handleApproveContentRequest = async (id: string) => {
+    setProcessingApprovalId(id);
+    try {
+      const reviewNote = (approvalNoteById[id] || '').trim();
+      const res = await fetch(`/api/admin/approvals/${encodeURIComponent(id)}/approve`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({reviewNote: reviewNote || undefined}),
+      });
+      const data = (await res.json()) as {
+        approval?: ContentApprovalRequest;
+        section?: ContentApprovalRequest['section'];
+        action?: ContentApprovalRequest['action'];
+        appliedItem?: unknown;
+        deletedId?: string;
+        posts?: Post[];
+        fatawa?: FatwaItem[];
+        motherOasisItems?: MotherOasisItem[];
+        sadaMaterials?: SadaMaterialItem[];
+        customAdhkar?: CustomAdhkarItem[];
+        customBooks?: CustomBookItem[];
+        deafMuteVideos?: DeafMuteVideoItem[];
+        aiDawahCards?: ClassicDawahCard[];
+        dawahCardsMeta?: DawahCardsMeta;
+        poetryItems?: PoetryAnecdoteItem[];
+        error?: string;
+      };
+      if (!res.ok || !data.approval) {
+        onNotify(data.error || 'تعذر اعتماد الطلب');
+        return;
+      }
+      setPendingApprovals((prev) => prev.map((a) => (a.id === id ? data.approval! : a)));
+      if (Array.isArray(data.posts)) {
+        if (data.action === 'create' && data.appliedItem) {
+          onPublishPost(data.appliedItem as Post);
+          void cloudUpsertPost(data.appliedItem as Post).catch(() => undefined);
+        } else if (data.action === 'update' && data.appliedItem) {
+          onUpdatePost(data.appliedItem as Post);
+          void cloudUpsertPost(data.appliedItem as Post).catch(() => undefined);
+        } else if (data.action === 'delete' && data.deletedId) {
+          onDeletePost(data.deletedId);
+          void cloudDeletePost(data.deletedId).catch(() => undefined);
+        }
+      }
+      if (Array.isArray(data.fatawa)) {
+        if (data.action === 'create' && data.appliedItem) {
+          onAddFatwa(data.appliedItem as FatwaItem);
+          void cloudUpsertFatwa(data.appliedItem as FatwaItem).catch(() => undefined);
+        } else if (data.action === 'delete' && data.deletedId) {
+          onDeleteFatwa(data.deletedId);
+          void cloudDeleteFatwa(data.deletedId).catch(() => undefined);
+        }
+      }
+      if (Array.isArray(data.motherOasisItems)) {
+        onMotherOasisChange?.(data.motherOasisItems);
+        if (data.deletedId) void cloudDeleteMotherOasis(data.deletedId).catch(() => undefined);
+        else if (data.appliedItem) void cloudUpsertMotherOasis(data.appliedItem as MotherOasisItem).catch(() => undefined);
+      }
+      if (Array.isArray(data.sadaMaterials)) {
+        onSadaMaterialsChange?.(data.sadaMaterials);
+        if (data.deletedId) void cloudDeleteSadaMaterial(data.deletedId).catch(() => undefined);
+        else if (data.appliedItem) void cloudUpsertSadaMaterial(data.appliedItem as SadaMaterialItem).catch(() => undefined);
+      }
+      if (Array.isArray(data.customAdhkar)) {
+        onCustomAdhkarChange?.(data.customAdhkar);
+        if (data.deletedId) void cloudDeleteCustomAdhkar(data.deletedId).catch(() => undefined);
+        else if (data.appliedItem) void cloudUpsertCustomAdhkar(data.appliedItem as CustomAdhkarItem).catch(() => undefined);
+      }
+      if (Array.isArray(data.customBooks)) {
+        onCustomBooksChange?.(data.customBooks);
+        if (data.deletedId) void cloudDeleteCustomBook(data.deletedId).catch(() => undefined);
+        else if (data.appliedItem) void cloudUpsertCustomBook(data.appliedItem as CustomBookItem).catch(() => undefined);
+      }
+      if (Array.isArray(data.deafMuteVideos)) {
+        onDeafMuteVideosChange?.(data.deafMuteVideos);
+        if (data.deletedId) void cloudDeleteDeafMuteVideo(data.deletedId).catch(() => undefined);
+        else if (data.appliedItem) void cloudUpsertDeafMuteVideo(data.appliedItem as DeafMuteVideoItem).catch(() => undefined);
+      }
+      if (Array.isArray(data.aiDawahCards)) {
+        onAiDawahCardsChange?.(data.aiDawahCards);
+        if (data.appliedItem) void cloudUpsertAiDawahCard(data.appliedItem as ClassicDawahCard).catch(() => undefined);
+      }
+      if (data.dawahCardsMeta) onDawahCardsMetaChange?.(data.dawahCardsMeta);
+      if (Array.isArray(data.poetryItems)) onPoetryItemsChange?.(data.poetryItems);
+      onNotify('تمت الموافقة ونشر التعديل في الموقع والسحابة للزوار');
+    } catch {
+      onNotify('تعذر الاتصال بالخادم لاعتماد الطلب');
+    } finally {
+      setProcessingApprovalId(null);
+    }
+  };
+
+  const handleRejectContentRequest = async (id: string) => {
+    setProcessingApprovalId(id);
+    try {
+      const reviewNote = (approvalNoteById[id] || '').trim();
+      const res = await fetch(`/api/admin/approvals/${encodeURIComponent(id)}/reject`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({reviewNote: reviewNote || undefined}),
+      });
+      const data = (await res.json()) as {approval?: ContentApprovalRequest; error?: string};
+      if (!res.ok || !data.approval) {
+        onNotify(data.error || 'تعذر رفض الطلب');
+        return;
+      }
+      setPendingApprovals((prev) => prev.map((a) => (a.id === id ? data.approval! : a)));
+      onNotify('تم رفض طلب التعديل وإشعار صاحبه في السجل');
+    } catch {
+      onNotify('تعذر الاتصال بالخادم لرفض الطلب');
+    } finally {
+      setProcessingApprovalId(null);
     }
   };
 
@@ -2132,8 +2680,6 @@ export function AdminStudioView({
             </button>
           )}
 
-          <PWAInstallButton compact onNotify={onNotify} />
-
           <button
             type="button"
             onClick={onExitAdmin}
@@ -2183,26 +2729,39 @@ export function AdminStudioView({
           {/* Tab 1: Posts Publishing, Edit/Delete & Inbox */}
           {tab === 'studio' && (
             <>
-              <LiveStatsStrip compact />
-
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 {[
                   {value: `${posts.length.toLocaleString('ar-EG')}`, label: 'موعظة منشورة', color: 'text-[#006a46] dark:text-[#6cdba6]'},
-                  {value: `${fatawa.length.toLocaleString('ar-EG')}`, label: 'فتوى معتمدة', color: 'text-[#7c5800] dark:text-[#f2be5e]'},
+                  {value: `${Math.max(registeredVisitors.length, registeredMembersCount).toLocaleString('ar-EG')}`, label: 'الأعضاء المسجلون', color: 'text-[#7c5800] dark:text-[#f2be5e]'},
                   {value: `${(suggestions.length + volunteers.length).toLocaleString('ar-EG')}`, label: 'تذاكر الزوار', color: 'text-[#006389] dark:text-[#80cfff]'},
-                  {value: `${visitorsCount.toLocaleString('ar-EG')}`, label: 'الزوار بالخادم', color: 'text-[#006a46] dark:text-[#6cdba6]', Icon: Eye},
+                  {value: `${Math.max(4580, visitorsCount).toLocaleString('ar-EG')}`, label: 'الزوار بالخادم', color: 'text-[#006a46] dark:text-[#6cdba6]', Icon: Eye},
                   {value: `${onlineVisitorsCount.toLocaleString('ar-EG')}`, label: 'الموجودين الآن', color: 'text-[#008559] dark:text-[#6cdba6]', Icon: Eye},
-                  {value: `${clicksCount.toLocaleString('ar-EG')}`, label: 'التفاعلات', color: 'text-[#006389] dark:text-[#80cfff]', Icon: MousePointerClick},
+                  {value: `${Math.max(8540, clicksCount).toLocaleString('ar-EG')}`, label: 'التفاعلات', color: 'text-[#006389] dark:text-[#80cfff]', Icon: MousePointerClick},
                 ].map((kpi) => (
                   <div
                     key={kpi.label}
-                    className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-3.5 text-center"
+                    className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-3.5 text-center"
                   >
                     <span className={`text-lg font-bold tabular-nums block ${kpi.color}`}>{kpi.value}</span>
                     <span className="text-xs text-[#6e7a71] dark:text-slate-400">{kpi.label}</span>
                   </div>
                 ))}
               </div>
+
+          {!isPrimaryAdmin && (
+            <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/35 border border-amber-400/40 px-4 py-3 text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center justify-between gap-3">
+              <span>
+                ملاحظة: صلاحيتك كمشرف تُرسل الإضافات والتعديلات إلى «اعتماد تعديلات المشرفين» ليوافق عليها المسؤول الأول قبل النشر للزوار.
+              </span>
+              <button
+                type="button"
+                onClick={() => setTab('approvals')}
+                className="px-3 py-1.5 rounded-xl bg-amber-600 text-white text-[11px] font-extrabold shrink-0"
+              >
+                متابعة طلباتي ({pendingApprovalsCount})
+              </button>
+            </div>
+          )}
 
           {/* AI Daily Nafahat Renewal Bar */}
           {onRefreshNafahatAI && (
@@ -2253,8 +2812,61 @@ export function AdminStudioView({
             </section>
           )}
 
+          {/* AI Daily Dawah Cards & Verified Hadiths Renewal Bar */}
+          {onRefreshDawahCardsAI && (
+            <section className="rounded-2xl bg-[#f2fbf7] dark:bg-[#132920] border border-[#006a46]/30 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#006a46] dark:text-[#6cdba6]">
+                  <Sparkles className="w-4 h-4 shrink-0" />
+                  <span>البطاقات الدعوية والأحاديث الصحيحة بالذكاء الاصطناعي (تتجدد يومياً تلقائياً لجميع الزوار)</span>
+                </div>
+                <p className="text-xs text-[#3e4a42] dark:text-slate-300">
+                  آخر تحديث: {dawahCardsMeta?.lastUpdatedDate || 'تلقائي'} · بطاقات محفوظة: {aiDawahCards.length.toLocaleString('ar-EG')}
+                </p>
+                {aiCardsFeedback && (
+                  <p
+                    className={`text-xs font-bold pt-0.5 ${
+                      aiCardsFeedback.ok ? 'text-[#006a46] dark:text-[#6cdba6]' : 'text-[#ba1a1a] dark:text-rose-300'
+                    }`}
+                  >
+                    {aiCardsFeedback.text}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setTab('dawah-cards')}
+                  className="min-h-[40px] px-3.5 py-2 rounded-xl bg-white dark:bg-[#1b3029] border border-[#006a46]/30 text-[#006a46] dark:text-[#6cdba6] text-xs font-bold"
+                >
+                  إدارة وإضافة بطاقة يدوياً
+                </button>
+                <button
+                  type="button"
+                  disabled={refreshingCardsAI}
+                  onClick={async () => {
+                    setRefreshingCardsAI(true);
+                    setAiCardsFeedback(null);
+                    try {
+                      const result = await onRefreshDawahCardsAI();
+                      setAiCardsFeedback({ok: result.ok, text: result.message});
+                      onNotify(result.message);
+                    } finally {
+                      setRefreshingCardsAI(false);
+                    }
+                  }}
+                  className="min-h-[40px] px-4 py-2 rounded-xl bg-[#006a46] hover:bg-[#005235] disabled:opacity-60 text-white text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors"
+                >
+                  <RefreshCw className={`w-4 h-4 shrink-0 ${refreshingCardsAI ? 'animate-spin' : ''}`} />
+                  <span>{refreshingCardsAI ? 'جاري التوليد...' : 'تجديد البطاقات والأحاديث الآن'}</span>
+                </button>
+              </div>
+            </section>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            <section className="lg:col-span-7 rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+            <section className="lg:col-span-7 rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-base font-bold text-[#0e1d25] dark:text-white">
                   {editingPostId ? 'تعديل الموعظة المحددة' : 'صياغة ونشر موعظة جديدة'}
@@ -2275,20 +2887,48 @@ export function AdminStudioView({
                 </div>
               </div>
 
+              <div className="rounded-xl bg-[#f3faf6] dark:bg-[#193027] border border-[#006a46]/20 p-3 flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={aiGenTopicInput}
+                  onChange={(e) => setAiGenTopicInput(e.target.value)}
+                  placeholder="موضوع اختياري للتوليد الذكي (مثال: ثمرة الصبر)..."
+                  className="flex-1 min-w-[180px] min-h-[38px] rounded-lg bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 px-3 text-xs"
+                />
+                <button
+                  type="button"
+                  disabled={Boolean(aiGenBusySection)}
+                  onClick={() => void handleAiGenerateSection('post', aiGenTopicInput, category)}
+                  className="min-h-[38px] px-3 py-1.5 rounded-lg bg-[#006a46] hover:bg-[#005235] disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{aiGenBusySection === 'post' ? 'جاري التوليد...' : 'إنشاء موعظة بالذكاء الاصطناعي'}</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(aiGenBusySection)}
+                  onClick={() => void handleAiGenerateSection('story', aiGenTopicInput, 'قصص وعبر')}
+                  className="min-h-[38px] px-3 py-1.5 rounded-lg bg-[#7c5800] hover:bg-[#614400] disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{aiGenBusySection === 'story' ? 'جاري التوليد...' : 'إنشاء قصة وعبرة بالذكاء الاصطناعي'}</span>
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="عنوان مختصر للموعظة"
-                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                 />
                 <input
                   type="text"
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
                   placeholder="المصدر / القائل"
-                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                 />
               </div>
 
@@ -2296,7 +2936,7 @@ export function AdminStudioView({
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 py-2 text-sm focus:outline-none"
+                  className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 py-2 text-sm focus:outline-none"
                 >
                   {POST_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
@@ -2307,7 +2947,7 @@ export function AdminStudioView({
                 <select
                   value={mediaType}
                   onChange={(e) => setMediaType(e.target.value as MediaType)}
-                  className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 py-2 text-sm focus:outline-none"
+                  className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 py-2 text-sm focus:outline-none"
                 >
                   <option value="quote">بطاقة اقتباس دعوية</option>
                   <option value="sada">رسالة صدى الخير الدعوية</option>
@@ -2320,7 +2960,7 @@ export function AdminStudioView({
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 placeholder="اكتب نص الموعظة أو الخاطرة الإيمانية..."
-                className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] p-4 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#006a46]"
               />
 
               <div className="flex flex-wrap items-center gap-2">
@@ -2354,7 +2994,7 @@ export function AdminStudioView({
                   value={youtubeUrl}
                   onChange={(e) => setYoutubeUrl(e.target.value)}
                   placeholder="رابط المقطع على يوتيوب (اختياري)"
-                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 py-2 text-sm focus:outline-none"
+                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 py-2 text-sm focus:outline-none"
                 />
               )}
 
@@ -2474,7 +3114,7 @@ export function AdminStudioView({
                   type="button"
                   onClick={() => setBroadcastPost(null)}
                   aria-label="إغلاق لوحة البث"
-                  className="w-9 h-9 rounded-full bg-white dark:bg-[#0b1f18] flex items-center justify-center"
+                  className="w-9 h-9 rounded-full bg-white dark:bg-[#223a32] flex items-center justify-center"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -2494,7 +3134,7 @@ export function AdminStudioView({
                 </a>
 
                 <a
-                  href={`https://t.me/share/url?url=${encodeURIComponent(window.location.origin)}&text=${encodeURIComponent(
+                  href={`https://t.me/share/url?url=${encodeURIComponent(getPublicSiteUrl('/?tab=home'))}&text=${encodeURIComponent(
                     formatBroadcastText(broadcastPost),
                   )}`}
                   target="_blank"
@@ -2550,7 +3190,7 @@ export function AdminStudioView({
                       href={ch.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3 py-1.5 rounded-lg bg-white dark:bg-[#0b1f18] border border-slate-200 dark:border-white/10 text-xs font-semibold text-[#006a46] dark:text-[#6cdba6] flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-lg bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-xs font-semibold text-[#006a46] dark:text-[#6cdba6] flex items-center gap-1"
                     >
                       <span>{ch.name}</span>
                       <ExternalLink className="w-3 h-3" />
@@ -2561,7 +3201,7 @@ export function AdminStudioView({
           )}
 
           {/* Manage Existing Posts */}
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
             <h2 className="text-base font-bold text-[#0e1d25] dark:text-white">
               إدارة المواعظ المنشورة ({posts.length.toLocaleString('ar-EG')})
             </h2>
@@ -2569,7 +3209,7 @@ export function AdminStudioView({
               {posts.map((p) => (
                 <div
                   key={p.id}
-                  className="p-3.5 rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/70 dark:border-white/10 flex items-start justify-between gap-3"
+                  className="p-3.5 rounded-xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10 flex items-start justify-between gap-3"
                 >
                   <div className="min-w-0">
                     <span className="text-[11px] font-bold text-[#006a46] dark:text-[#6cdba6] flex items-center gap-1.5">
@@ -2590,7 +3230,7 @@ export function AdminStudioView({
                         onClick={() => onTriggerAutoPost(p.id)}
                         aria-label="نشر آلي الآن"
                         title="نشر آلي عبر البوت (فيسبوك/واتساب/X)"
-                        className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-[#0b1f18] text-emerald-700 dark:text-emerald-300 flex items-center justify-center"
+                        className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-[#223a32] text-emerald-700 dark:text-emerald-300 flex items-center justify-center"
                       >
                         <Bot className="w-4 h-4" />
                       </button>
@@ -2600,7 +3240,7 @@ export function AdminStudioView({
                       onClick={() => void triggerMultiSiteBroadcast(p)}
                       aria-label="مشاركة بجميع المواقع"
                       title="نشر بجميع المواقع"
-                      className="w-9 h-9 rounded-lg bg-white dark:bg-[#0b1f18] text-[#7c5800] dark:text-[#f2be5e] flex items-center justify-center"
+                      className="w-9 h-9 rounded-lg bg-white dark:bg-[#223a32] text-[#7c5800] dark:text-[#f2be5e] flex items-center justify-center"
                     >
                       <Share2 className="w-4 h-4" />
                     </button>
@@ -2610,7 +3250,7 @@ export function AdminStudioView({
                         onClick={() => onToggleHidePost(p.id)}
                         aria-label={p.hidden ? 'إظهار' : 'إخفاء'}
                         title={p.hidden ? 'إظهار للزوار' : 'إخفاء عن الزوار'}
-                        className="w-9 h-9 rounded-lg bg-white dark:bg-[#0b1f18] text-amber-700 dark:text-amber-300 flex items-center justify-center"
+                        className="w-9 h-9 rounded-lg bg-white dark:bg-[#223a32] text-amber-700 dark:text-amber-300 flex items-center justify-center"
                       >
                         {p.hidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                       </button>
@@ -2619,7 +3259,7 @@ export function AdminStudioView({
                       type="button"
                       onClick={() => startEditPost(p)}
                       aria-label="تعديل"
-                      className="w-9 h-9 rounded-lg bg-white dark:bg-[#0b1f18] text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center"
+                      className="w-9 h-9 rounded-lg bg-white dark:bg-[#223a32] text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
@@ -2627,7 +3267,7 @@ export function AdminStudioView({
                       type="button"
                       onClick={() => void removePost(p.id)}
                       aria-label="حذف"
-                      className="w-9 h-9 rounded-lg bg-white dark:bg-[#0b1f18] text-[#ba1a1a] flex items-center justify-center"
+                      className="w-9 h-9 rounded-lg bg-white dark:bg-[#223a32] text-[#ba1a1a] flex items-center justify-center"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -2639,7 +3279,7 @@ export function AdminStudioView({
 
           {/* Synced Destinations + Inbox */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
+            <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-bold text-[#0e1d25] dark:text-white">وجهات النشر المتزامن</h2>
                 <button
@@ -2656,7 +3296,7 @@ export function AdminStudioView({
                   return (
                     <label
                       key={ch.id}
-                      className="flex items-center justify-between gap-2 p-3 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] cursor-pointer"
+                      className="flex items-center justify-between gap-2 p-3 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] cursor-pointer"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -2677,7 +3317,7 @@ export function AdminStudioView({
               </div>
             </section>
 
-            <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-4">
+            <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <MessageSquare className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
@@ -2701,7 +3341,7 @@ export function AdminStudioView({
               ) : (
                 <div className="space-y-2.5 max-h-72 overflow-y-auto">
                   {suggestions.slice(0, 5).map((s) => (
-                    <div key={s.id} className="p-3 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] text-xs space-y-1">
+                    <div key={s.id} className="p-3 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-xs space-y-1">
                       <span className="font-bold text-[#006a46] dark:text-[#6cdba6]">
                         {s.type === 'contribution'
                           ? 'دعم ومساهمة للموقع'
@@ -2732,7 +3372,7 @@ export function AdminStudioView({
       {/* Tab: Sada Al-Khair Independent Service Manager */}
       {tab === 'sada-alkhair' && (
         <div className="space-y-6">
-          <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+          <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -2752,6 +3392,15 @@ export function AdminStudioView({
                   إلغاء التعديل
                 </button>
               )}
+              <button
+                type="button"
+                disabled={Boolean(aiGenBusySection)}
+                onClick={() => void handleAiGenerateSection('sada', sadaTitle, `${sadaSpeakerName} (${sadaCategory})`)}
+                className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#193027] text-[#006a46] dark:text-[#6cdba6] border border-[#006a46]/25 text-xs font-extrabold flex items-center gap-1.5"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>{aiGenBusySection === 'sada' ? 'جاري الإعداد...' : 'توليد مادة بالذكاء الاصطناعي'}</span>
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -2769,7 +3418,7 @@ export function AdminStudioView({
                     );
                     if (nextType === 'poet') setSadaContentType('poetry');
                   }}
-                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3 text-xs font-bold"
+                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3 text-xs font-bold"
                 >
                   <option value="scholar">مشايخ ودعاة صدى الخير (٢٧)</option>
                   <option value="poet">شعراء السنة (٤)</option>
@@ -2781,7 +3430,7 @@ export function AdminStudioView({
                 <select
                   value={sadaSpeakerName}
                   onChange={(e) => setSadaSpeakerName(e.target.value)}
-                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3 text-xs font-bold"
+                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3 text-xs font-bold"
                 >
                   {(sadaSpeakerType === 'poet' ? SADA_SUNNAH_POETS : SADA_AL_KHAIR_SCHOLARS).map(
                     (person: SadaScholarProfile) => (
@@ -2802,7 +3451,7 @@ export function AdminStudioView({
                       e.target.value as NonNullable<SadaMaterialItem['contentType']>,
                     )
                   }
-                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3 text-xs font-bold"
+                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3 text-xs font-bold"
                 >
                   <option value="article">فائدة / كلمة مفرغة</option>
                   <option value="audio_link">رابط صوتي / درس</option>
@@ -2819,7 +3468,7 @@ export function AdminStudioView({
                   value={sadaCategory}
                   onChange={(e) => setSadaCategory(e.target.value)}
                   placeholder="مثال: العقيدة والمنهج"
-                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm"
+                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm"
                 />
               </label>
             </div>
@@ -2830,7 +3479,7 @@ export function AdminStudioView({
                 value={sadaTitle}
                 onChange={(e) => setSadaTitle(e.target.value)}
                 placeholder="عنوان الدرس أو الفائدة أو القصيدة..."
-                className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 text-sm font-semibold"
+                className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 text-sm font-semibold"
               />
               <input
                 type="url"
@@ -2838,7 +3487,7 @@ export function AdminStudioView({
                 value={sadaExternalUrl}
                 onChange={(e) => setSadaExternalUrl(e.target.value)}
                 placeholder="رابط المصدر الصوتي/المرئي (https://... اختياري)"
-                className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 text-sm"
+                className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 text-sm"
               />
             </div>
 
@@ -2847,7 +3496,7 @@ export function AdminStudioView({
               value={sadaBody}
               onChange={(e) => setSadaBody(e.target.value)}
               placeholder="اكتب نص الفائدة أو المحاضرة المفرغة أو الأبيات الشعرية..."
-              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] p-4 text-sm leading-relaxed"
+              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 text-sm leading-relaxed"
             />
 
             <div className="flex items-center justify-end gap-2">
@@ -2869,7 +3518,7 @@ export function AdminStudioView({
             </div>
           </section>
 
-          <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-3">
+          <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-3">
             <h3 className="text-base font-extrabold text-[#0e1d25] dark:text-white">
               المواد المنشورة في خدمة صدى الخير ({sadaMaterials.length.toLocaleString('ar-EG')})
             </h3>
@@ -2882,7 +3531,7 @@ export function AdminStudioView({
                 {sadaMaterials.map((item) => (
                   <article
                     key={item.id}
-                    className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] p-4 flex items-start justify-between gap-3"
+                    className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-4 flex items-start justify-between gap-3"
                   >
                     <div className="min-w-0 space-y-1">
                       <span className="text-[11px] font-extrabold text-[#006a46] dark:text-[#6cdba6]">
@@ -2908,7 +3557,7 @@ export function AdminStudioView({
                           window.scrollTo({top: 0, behavior: 'smooth'});
                         }}
                         aria-label={`تعديل ${item.title}`}
-                        className="min-w-[36px] min-h-[36px] rounded-xl bg-white dark:bg-[#0d211a] text-[#006a46] dark:text-[#6cdba6] border border-slate-200 dark:border-white/10 flex items-center justify-center"
+                        className="min-w-[36px] min-h-[36px] rounded-xl bg-white dark:bg-[#223a32] text-[#006a46] dark:text-[#6cdba6] border border-slate-200 dark:border-white/10 flex items-center justify-center"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
@@ -2931,7 +3580,7 @@ export function AdminStudioView({
 
       {/* Tab: Centralized Visitor Comments Moderation */}
       {tab === 'comments' && (
-        <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-5">
+        <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -2957,7 +3606,7 @@ export function AdminStudioView({
                   className={`min-h-[36px] px-3 rounded-xl text-xs font-extrabold transition-colors ${
                     commentFilter === f.id
                       ? 'bg-[#006a46] text-white'
-                      : 'bg-[#f4faff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                      : 'bg-[#f4faff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                   }`}
                 >
                   {f.label}
@@ -2971,7 +3620,7 @@ export function AdminStudioView({
             value={commentSearch}
             onChange={(e) => setCommentSearch(e.target.value)}
             placeholder="ابحث باسم المعلق أو نص التعليق أو عنوان الموعظة..."
-            className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 text-sm"
+            className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 text-sm"
           />
 
           {(() => {
@@ -3005,7 +3654,7 @@ export function AdminStudioView({
                   return (
                     <article
                       key={key}
-                      className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] p-4 space-y-2.5"
+                      className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-4 space-y-2.5"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="min-w-0">
@@ -3031,7 +3680,7 @@ export function AdminStudioView({
                                 setEditingCommentKey(key);
                                 setEditingCommentText(comment.text);
                               }}
-                              className="min-h-[34px] px-2.5 rounded-lg bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-[#006a46] dark:text-[#6cdba6] text-[11px] font-bold flex items-center gap-1"
+                              className="min-h-[34px] px-2.5 rounded-lg bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-[#006a46] dark:text-[#6cdba6] text-[11px] font-bold flex items-center gap-1"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                               <span>تعديل</span>
@@ -3091,7 +3740,7 @@ export function AdminStudioView({
                             rows={2}
                             value={editingCommentText}
                             onChange={(e) => setEditingCommentText(e.target.value)}
-                            className="w-full rounded-xl bg-white dark:bg-[#0d211a] border border-emerald-700/25 p-2.5 text-sm"
+                            className="w-full rounded-xl bg-white dark:bg-[#223a32] border border-emerald-700/25 p-2.5 text-sm"
                           />
                           <div className="flex items-center gap-2">
                             <button
@@ -3152,10 +3801,21 @@ export function AdminStudioView({
       {/* Tab 2: Fatawa Management (Both Admin & Editor) */}
       {tab === 'fatawa' && (
         <div className="space-y-5">
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
-            <h2 className="text-base font-bold text-[#0e1d25] dark:text-white">
-              إضافة فتوى جديدة للعلماء الخمسة المعتمدين
-            </h2>
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-bold text-[#0e1d25] dark:text-white">
+                إضافة فتوى جديدة للعلماء الخمسة المعتمدين (يدوياً أو بالذكاء الاصطناعي)
+              </h2>
+              <button
+                type="button"
+                disabled={Boolean(aiGenBusySection)}
+                onClick={() => void handleAiGenerateSection('fatwa', fatwaQuestion, fatwaCategory)}
+                className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-[#f3faf6] dark:bg-[#193027] text-[#006a46] dark:text-[#6cdba6] border border-[#006a46]/25 text-xs font-extrabold flex items-center gap-1.5"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>{aiGenBusySection === 'fatwa' ? 'جاري الإعداد...' : 'اقتراح فتوى موثقة بالذكاء الاصطناعي'}</span>
+              </button>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -3163,7 +3823,7 @@ export function AdminStudioView({
                 <select
                   value={fatwaScholarId}
                   onChange={(e) => setFatwaScholarId(e.target.value as FatwaScholarId)}
-                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm focus:outline-none"
+                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm focus:outline-none"
                 >
                   {FATWA_SCHOLARS.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -3177,7 +3837,7 @@ export function AdminStudioView({
                 <select
                   value={fatwaCategory}
                   onChange={(e) => setFatwaCategory(e.target.value)}
-                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm focus:outline-none"
+                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm focus:outline-none"
                 >
                   {FATWA_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
@@ -3193,7 +3853,7 @@ export function AdminStudioView({
               value={fatwaQuestion}
               onChange={(e) => setFatwaQuestion(e.target.value)}
               placeholder="نص السؤال..."
-              className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+              className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
             />
 
             <textarea
@@ -3201,7 +3861,7 @@ export function AdminStudioView({
               value={fatwaAnswer}
               onChange={(e) => setFatwaAnswer(e.target.value)}
               placeholder="جواب الشيخ الموثق..."
-              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] p-4 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#006a46]"
             />
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -3210,7 +3870,7 @@ export function AdminStudioView({
                 value={fatwaSource}
                 onChange={(e) => setFatwaSource(e.target.value)}
                 placeholder="المصدر / الكتاب أو الدرس (اختياري)"
-                className="flex-1 min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 text-sm focus:outline-none"
+                className="flex-1 min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 text-sm focus:outline-none"
               />
               <button
                 type="button"
@@ -3223,7 +3883,7 @@ export function AdminStudioView({
             </div>
           </section>
 
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
             <h2 className="text-base font-bold text-[#0e1d25] dark:text-white">
               الفتاوى المنشورة حالياً ({fatawa.length.toLocaleString('ar-EG')})
             </h2>
@@ -3231,7 +3891,7 @@ export function AdminStudioView({
               {fatawa.map((ft) => (
                 <div
                   key={ft.id}
-                  className="p-3.5 rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/70 dark:border-white/10 flex items-start justify-between gap-3"
+                  className="p-3.5 rounded-xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10 flex items-start justify-between gap-3"
                 >
                   <div className="min-w-0 space-y-1">
                     <span className="text-xs font-bold text-[#006a46] dark:text-[#6cdba6] block">
@@ -3244,7 +3904,7 @@ export function AdminStudioView({
                     type="button"
                     onClick={() => void removeFatwa(ft.id)}
                     aria-label="حذف الفتوى"
-                    className="w-9 h-9 rounded-lg bg-white dark:bg-[#0b1f18] text-[#ba1a1a] flex items-center justify-center shrink-0"
+                    className="w-9 h-9 rounded-lg bg-white dark:bg-[#223a32] text-[#ba1a1a] flex items-center justify-center shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -3257,7 +3917,7 @@ export function AdminStudioView({
 
       {/* Tab 3: Primary Admin ONLY — Edit Every Button, Label, Hero & Section Text */}
       {tab === 'page-config' && isPrimaryAdmin && (
-        <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
+        <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-[#0e1d25] dark:text-white">
@@ -3274,7 +3934,7 @@ export function AdminStudioView({
                   setEditConfig({...DEFAULT_SITE_CONFIG});
                   onNotify('تمت استعادة النصوص الافتراضية في المعاينة، اضغط حفظ للاعتماد.');
                 }}
-                className="min-h-[44px] px-4 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] text-xs font-bold flex items-center gap-1.5"
+                className="min-h-[44px] px-4 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-xs font-bold flex items-center gap-1.5"
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>النص الافتراضي</span>
@@ -3340,7 +4000,7 @@ export function AdminStudioView({
                     rows={field.key.includes('Clause') ? 3 : 2}
                     value={editConfig[field.key]}
                     onChange={(e) => updateConfigField(field.key, e.target.value)}
-                    className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                    className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                   />
                 ) : (
                   <input
@@ -3349,7 +4009,7 @@ export function AdminStudioView({
                     placeholder={field.key === 'supportEmail' ? 'محجوب تلقائياً عن الزوار' : undefined}
                     value={editConfig[field.key]}
                     onChange={(e) => updateConfigField(field.key, e.target.value)}
-                    className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                    className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                   />
                 )}
               </div>
@@ -3362,7 +4022,7 @@ export function AdminStudioView({
       {tab === 'links-icons' && isPrimaryAdmin && (
         <div className="space-y-6">
           {/* Links Editor */}
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 space-y-4">
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-[#0e1d25] dark:text-white">روابط منصات التواصل الخاصة بك</h2>
@@ -3397,7 +4057,7 @@ export function AdminStudioView({
                 return (
                   <div
                     key={ch.id}
-                    className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/80 dark:border-white/10 p-4 space-y-3"
+                    className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/80 dark:border-white/10 p-4 space-y-3"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5">
@@ -3434,21 +4094,21 @@ export function AdminStudioView({
                         value={ch.name}
                         onChange={(e) => updateLinkField(ch.id, 'name', e.target.value)}
                         placeholder="اسم المنصة"
-                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#0b1f18] px-3 text-sm focus:outline-none"
+                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#223a32] px-3 text-sm focus:outline-none"
                       />
                       <input
                         type="text"
                         value={ch.handle}
                         onChange={(e) => updateLinkField(ch.id, 'handle', e.target.value)}
                         placeholder="المعرف (@handle)"
-                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#0b1f18] px-3 text-sm focus:outline-none"
+                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#223a32] px-3 text-sm focus:outline-none"
                       />
                       <input
                         type="text"
                         value={ch.followers}
                         onChange={(e) => updateLinkField(ch.id, 'followers', e.target.value)}
                         placeholder="المتابعين"
-                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#0b1f18] px-3 text-sm focus:outline-none"
+                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#223a32] px-3 text-sm focus:outline-none"
                       />
                       <input
                         type="url"
@@ -3456,12 +4116,12 @@ export function AdminStudioView({
                         value={ch.url}
                         onChange={(e) => updateLinkField(ch.id, 'url', e.target.value)}
                         placeholder="https://..."
-                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#0b1f18] px-3 text-sm focus:outline-none"
+                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#223a32] px-3 text-sm focus:outline-none"
                       />
                       <select
                         value={ch.iconId}
                         onChange={(e) => updateLinkField(ch.id, 'iconId', e.target.value)}
-                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#0b1f18] px-3 text-sm focus:outline-none"
+                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#223a32] px-3 text-sm focus:outline-none"
                       >
                         {ICON_OPTIONS.map((opt) => (
                           <option key={opt.id} value={opt.id}>
@@ -3472,7 +4132,7 @@ export function AdminStudioView({
                       <select
                         value={ch.colorScheme}
                         onChange={(e) => updateLinkField(ch.id, 'colorScheme', e.target.value as ColorScheme)}
-                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#0b1f18] px-3 text-sm focus:outline-none"
+                        className="min-h-[42px] rounded-xl bg-white dark:bg-[#223a32] px-3 text-sm focus:outline-none"
                       >
                         {(Object.keys(COLOR_SCHEME_STYLES) as ColorScheme[]).map((cs) => (
                           <option key={cs} value={cs}>
@@ -3487,7 +4147,7 @@ export function AdminStudioView({
                       value={ch.description}
                       onChange={(e) => updateLinkField(ch.id, 'description', e.target.value)}
                       placeholder="وصف مختصر للقناة..."
-                      className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#0b1f18] px-3 text-sm focus:outline-none"
+                      className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#223a32] px-3 text-sm focus:outline-none"
                     />
                   </div>
                 );
@@ -3496,7 +4156,7 @@ export function AdminStudioView({
           </section>
 
           {/* Icons & Emblem */}
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 space-y-6">
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-[#0e1d25] dark:text-white">تخصيص الشعار وهوية الأيقونات</h2>
@@ -3507,7 +4167,7 @@ export function AdminStudioView({
               <button
                 type="button"
                 onClick={resetIcons}
-                className="min-h-[44px] px-4 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] text-xs font-bold flex items-center gap-1.5"
+                className="min-h-[44px] px-4 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-xs font-bold flex items-center gap-1.5"
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>استعادة الأيقونات</span>
@@ -3524,7 +4184,7 @@ export function AdminStudioView({
                   dir="ltr"
                   value={editHandle}
                   onChange={(e) => setEditHandle(e.target.value)}
-                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 text-sm font-semibold focus:outline-none"
+                  className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 text-sm font-semibold focus:outline-none"
                 />
               </div>
 
@@ -3559,7 +4219,7 @@ export function AdminStudioView({
                 return (
                   <div
                     key={slot.key}
-                    className="rounded-xl bg-[#f4faff] dark:bg-[#112921] p-3.5 flex items-center justify-between gap-3"
+                    className="rounded-xl bg-[#f4faff] dark:bg-[#28453b] p-3.5 flex items-center justify-between gap-3"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-9 h-9 rounded-lg bg-[#006a46]/10 text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center shrink-0">
@@ -3570,7 +4230,7 @@ export function AdminStudioView({
                     <select
                       value={editIcons[slot.key]}
                       onChange={(e) => setEditIcons((prev) => ({...prev, [slot.key]: e.target.value}))}
-                      className="min-h-[38px] rounded-lg bg-white dark:bg-[#0b1f18] px-2 text-xs font-semibold focus:outline-none"
+                      className="min-h-[38px] rounded-lg bg-white dark:bg-[#223a32] px-2 text-xs font-semibold focus:outline-none"
                     >
                       {ICON_OPTIONS.map((opt) => (
                         <option key={opt.id} value={opt.id}>
@@ -3585,7 +4245,7 @@ export function AdminStudioView({
           </section>
 
           {/* Security & Gesture */}
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-4">
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-4">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-[#7c5800] dark:text-[#f2be5e]" />
               <h2 className="text-base font-bold text-[#0e1d25] dark:text-white">
@@ -3594,7 +4254,7 @@ export function AdminStudioView({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="flex items-center justify-between p-3 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] cursor-pointer">
+              <label className="flex items-center justify-between p-3 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] cursor-pointer">
                 <span className="text-sm font-medium">الضغط المطول على شعار التطبيق (ثانيتين)</span>
                 <input
                   type="radio"
@@ -3604,7 +4264,7 @@ export function AdminStudioView({
                   className="w-4 h-4 accent-[#006a46]"
                 />
               </label>
-              <label className="flex items-center justify-between p-3 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] cursor-pointer">
+              <label className="flex items-center justify-between p-3 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] cursor-pointer">
                 <span className="text-sm font-medium">٥ نقرات متتالية على اسم «{siteConfig.appName}»</span>
                 <input
                   type="radio"
@@ -3620,7 +4280,7 @@ export function AdminStudioView({
               <select
                 value={targetUser}
                 onChange={(e) => setTargetUser(e.target.value)}
-                className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 text-sm font-semibold focus:outline-none"
+                className="min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 text-sm font-semibold focus:outline-none"
               >
                 {isFounderAccount && (
                   <option value="moalwbri">تحديث كلمة مرور المسؤول الأول (moalwbri)</option>
@@ -3633,7 +4293,7 @@ export function AdminStudioView({
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="كلمة مرور جديدة (اختياري)"
-                className="flex-1 min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none"
+                className="flex-1 min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none"
               />
               <button
                 type="button"
@@ -3661,21 +4321,21 @@ export function AdminStudioView({
                     value={founderCurrentPassword}
                     onChange={(e) => setFounderCurrentPassword(e.target.value)}
                     placeholder="كلمة المرور الحالية"
-                    className="min-h-[42px] rounded-xl bg-[#f4faff] dark:bg-[#112921] px-3.5 text-sm"
+                    className="min-h-[42px] rounded-xl bg-[#f4faff] dark:bg-[#28453b] px-3.5 text-sm"
                   />
                   <input
                     type="password"
                     value={founderNewPassword}
                     onChange={(e) => setFounderNewPassword(e.target.value)}
                     placeholder="كلمة المرور الجديدة (٦+)"
-                    className="min-h-[42px] rounded-xl bg-[#f4faff] dark:bg-[#112921] px-3.5 text-sm"
+                    className="min-h-[42px] rounded-xl bg-[#f4faff] dark:bg-[#28453b] px-3.5 text-sm"
                   />
                   <input
                     type="password"
                     value={founderConfirmPassword}
                     onChange={(e) => setFounderConfirmPassword(e.target.value)}
                     placeholder="تأكيد كلمة المرور الجديدة"
-                    className="min-h-[42px] rounded-xl bg-[#f4faff] dark:bg-[#112921] px-3.5 text-sm"
+                    className="min-h-[42px] rounded-xl bg-[#f4faff] dark:bg-[#28453b] px-3.5 text-sm"
                   />
                   <button
                     type="button"
@@ -3691,7 +4351,7 @@ export function AdminStudioView({
           </section>
 
           {/* Delegation & Multi-Account Portability (Primary Admin ONLY) */}
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-5">
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
@@ -3711,7 +4371,7 @@ export function AdminStudioView({
                 className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#ffdad6]/60 hover:bg-[#ffdad6] text-[#93000a] text-xs font-bold flex items-center gap-1.5"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>{resettingCounters ? 'جاري التصفير...' : 'تصفير الإعجابات والتعليقات والدعاء'}</span>
+                <span>{resettingCounters ? 'جاري التصفير...' : 'تصفير الإعجابات والتعليقات والرسوم اليومية'}</span>
               </button>
             </div>
 
@@ -3734,7 +4394,7 @@ export function AdminStudioView({
                   value={transferPassword}
                   onChange={(e) => setTransferPassword(e.target.value)}
                   placeholder="حدد كلمة مرور جديدة لحساب ax1ax70@gmail.com"
-                  className="flex-1 min-h-[44px] rounded-xl bg-white dark:bg-[#081712] border border-emerald-700/20 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                  className="flex-1 min-h-[44px] rounded-xl bg-white dark:bg-[#1b3029] border border-emerald-700/20 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                 />
                 <button
                   type="button"
@@ -3757,7 +4417,7 @@ export function AdminStudioView({
                       className={`p-3.5 rounded-2xl border space-y-2 ${
                         acc.disabled
                           ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 opacity-80'
-                          : 'bg-[#f4faff] dark:bg-[#112921] border-slate-200/70 dark:border-white/10'
+                          : 'bg-[#f4faff] dark:bg-[#28453b] border-slate-200/70 dark:border-white/10'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -3805,7 +4465,7 @@ export function AdminStudioView({
                                 );
                               }}
                               title="تعديل الصلاحيات"
-                              className="w-8 h-8 rounded-lg bg-white dark:bg-[#0b1f18] text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center"
+                              className="w-8 h-8 rounded-lg bg-white dark:bg-[#223a32] text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
@@ -3813,7 +4473,7 @@ export function AdminStudioView({
                               type="button"
                               onClick={() => void toggleDisableAccount(acc)}
                               title={acc.disabled ? 'تفعيل الحساب' : 'تعطيل الحساب'}
-                              className="w-8 h-8 rounded-lg bg-white dark:bg-[#0b1f18] text-amber-700 dark:text-amber-300 flex items-center justify-center"
+                              className="w-8 h-8 rounded-lg bg-white dark:bg-[#223a32] text-amber-700 dark:text-amber-300 flex items-center justify-center"
                             >
                               {acc.disabled ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                             </button>
@@ -3821,7 +4481,7 @@ export function AdminStudioView({
                               type="button"
                               onClick={() => void removeDelegatedAccount(acc.username)}
                               aria-label={`حذف ${acc.username}`}
-                              className="w-8 h-8 rounded-lg bg-white dark:bg-[#0b1f18] text-[#ba1a1a] flex items-center justify-center"
+                              className="w-8 h-8 rounded-lg bg-white dark:bg-[#223a32] text-[#ba1a1a] flex items-center justify-center"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -3833,13 +4493,13 @@ export function AdminStudioView({
                           {acc.permissions.slice(0, 5).map((perm) => (
                             <span
                               key={perm}
-                              className="px-2 py-0.5 rounded-md bg-white dark:bg-[#081712] text-[10px] font-bold text-[#3e4a42] dark:text-slate-300"
+                              className="px-2 py-0.5 rounded-md bg-white dark:bg-[#1b3029] text-[10px] font-bold text-[#3e4a42] dark:text-slate-300"
                             >
                               {ADMIN_PERMISSION_LABELS.find((p) => p.id === perm)?.label || perm}
                             </span>
                           ))}
                           {acc.permissions.length > 5 && (
-                            <span className="px-2 py-0.5 rounded-md bg-white dark:bg-[#081712] text-[10px] font-bold text-[#006a46] dark:text-[#6cdba6]">
+                            <span className="px-2 py-0.5 rounded-md bg-white dark:bg-[#1b3029] text-[10px] font-bold text-[#006a46] dark:text-[#6cdba6]">
                               +{acc.permissions.length - 5}
                             </span>
                           )}
@@ -3851,7 +4511,7 @@ export function AdminStudioView({
               </div>
             )}
 
-            <div className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] p-4 space-y-3">
+            <div className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-extrabold text-[#0e1d25] dark:text-white">
                   {editingAccountUsername
@@ -3876,21 +4536,21 @@ export function AdminStudioView({
                   disabled={Boolean(editingAccountUsername)}
                   onChange={(e) => setNewAccUser(e.target.value)}
                   placeholder="اسم المستخدم"
-                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] px-3.5 text-sm focus:outline-none disabled:opacity-60"
+                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] px-3.5 text-sm focus:outline-none disabled:opacity-60"
                 />
                 <input
                   type="text"
                   value={newAccDisplayName}
                   onChange={(e) => setNewAccDisplayName(e.target.value)}
                   placeholder="الاسم الظاهر (اختياري)"
-                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] px-3.5 text-sm focus:outline-none"
+                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] px-3.5 text-sm focus:outline-none"
                 />
                 <input
                   type="password"
                   value={newAccPass}
                   onChange={(e) => setNewAccPass(e.target.value)}
                   placeholder={editingAccountUsername ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور'}
-                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] px-3.5 text-sm focus:outline-none"
+                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] px-3.5 text-sm focus:outline-none"
                 />
                 <select
                   value={newAccRole}
@@ -3899,7 +4559,7 @@ export function AdminStudioView({
                     setNewAccRole(role);
                     setNewAccPermissions(defaultPermissionsForScope(role, newAccSection));
                   }}
-                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] px-3 text-sm focus:outline-none"
+                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] px-3 text-sm focus:outline-none"
                 >
                   <option value="editor">محرر محتوى (Editor)</option>
                   <option value="supervisor">مشرف قسم (Supervisor)</option>
@@ -3913,7 +4573,7 @@ export function AdminStudioView({
                     setNewAccPermissions(defaultPermissionsForScope(newAccRole, scope));
                   }}
                   disabled={newAccRole === 'admin'}
-                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] px-3 text-sm focus:outline-none disabled:opacity-50"
+                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] px-3 text-sm focus:outline-none disabled:opacity-50"
                 >
                   <option value="all">جميع الأقسام المسموحة</option>
                   <option value="sada-alkhair">خدمة صدى الخير الدعوية</option>
@@ -3937,7 +4597,7 @@ export function AdminStudioView({
                       return (
                         <label
                           key={perm.id}
-                          className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 text-xs font-semibold cursor-pointer"
+                          className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 text-xs font-semibold cursor-pointer"
                         >
                           <span className="truncate">{perm.label}</span>
                           <input
@@ -4007,7 +4667,7 @@ export function AdminStudioView({
 
       {/* Primary Admin ONLY: Registered Visitors Directory (Emails, Phones & Names) */}
       {tab === 'visitors' && isPrimaryAdmin && (
-        <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-5">
+        <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -4023,7 +4683,7 @@ export function AdminStudioView({
                 type="button"
                 disabled={loadingVisitors}
                 onClick={() => void loadRegisteredVisitors()}
-                className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold flex items-center gap-1.5"
+                className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold flex items-center gap-1.5"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${loadingVisitors ? 'animate-spin' : ''}`} />
                 <span>تحديث القائمة</span>
@@ -4068,7 +4728,7 @@ export function AdminStudioView({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#f4faf7] dark:bg-[#112921] p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#f4faf7] dark:bg-[#28453b] p-3.5">
             <div className="relative flex-1 min-w-[220px]">
               <Search className="w-4 h-4 text-[#6e7a71] absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" />
               <input
@@ -4076,7 +4736,7 @@ export function AdminStudioView({
                 value={visitorsSearch}
                 onChange={(e) => setVisitorsSearch(e.target.value)}
                 placeholder="بحث بالاسم أو البريد الإلكتروني أو رقم الجوال..."
-                className="w-full min-h-[40px] ps-9 pe-3 rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                className="w-full min-h-[40px] ps-9 pe-3 rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
               />
             </div>
             <span className="text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6] tabular-nums px-2">
@@ -4107,7 +4767,7 @@ export function AdminStudioView({
                 {filtered.map((v) => (
                   <div
                     key={v.id}
-                    className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] p-4 space-y-2"
+                    className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-4 space-y-2"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-extrabold text-[#0e1d25] dark:text-white truncate">
@@ -4156,7 +4816,7 @@ export function AdminStudioView({
 
       {/* Tab 6 (Primary Admin ONLY): Auto-Poster Bot & Admin Notification Channels */}
       {tab === 'automation' && isPrimaryAdmin && (
-        <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
+        <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -4177,7 +4837,7 @@ export function AdminStudioView({
             </button>
           </div>
 
-          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] p-4 sm:p-5 space-y-4">
+          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] p-4 sm:p-5 space-y-4">
             <h3 className="text-sm font-extrabold text-[#0e1d25] dark:text-white">
               ١. بوت النشر الآلي (فيسبوك، واتساب، منصة X)
             </h3>
@@ -4191,7 +4851,7 @@ export function AdminStudioView({
                 value={editAutomation.autoPostWebhookUrl}
                 onChange={(e) => setEditAutomation((prev) => ({...prev, autoPostWebhookUrl: e.target.value}))}
                 placeholder="https://hook.eu1.make.com/..."
-                className="w-full min-h-[44px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-4 text-sm"
+                className="w-full min-h-[44px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-4 text-sm"
               />
             </label>
 
@@ -4205,7 +4865,7 @@ export function AdminStudioView({
               ).map((plat) => (
                 <label
                   key={plat.key}
-                  className="flex items-center justify-between gap-2 p-3 rounded-xl bg-white dark:bg-[#081712] border border-slate-200/80 dark:border-white/10 cursor-pointer"
+                  className="flex items-center justify-between gap-2 p-3 rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200/80 dark:border-white/10 cursor-pointer"
                 >
                   <span className="text-xs font-bold text-[#0e1d25] dark:text-white">{plat.label}</span>
                   <input
@@ -4224,7 +4884,7 @@ export function AdminStudioView({
             </div>
           </div>
 
-          <div className="rounded-2xl bg-[#fffbf2] dark:bg-[#13201b] border border-[#f2be5e]/35 p-4 sm:p-5 space-y-4">
+          <div className="rounded-2xl bg-[#fffbf2] dark:bg-[#243b32] border border-[#f2be5e]/35 p-4 sm:p-5 space-y-4">
             <h3 className="text-sm font-extrabold text-[#0e1d25] dark:text-white">
               ٢. إشعارات التذاكر الصامتة للمشرف (+ إشعارات واتساب للزائر)
             </h3>
@@ -4239,7 +4899,7 @@ export function AdminStudioView({
                   value={editAutomation.adminNotifyWebhookUrl}
                   onChange={(e) => setEditAutomation((prev) => ({...prev, adminNotifyWebhookUrl: e.target.value}))}
                   placeholder="https://hook.eu1.make.com/..."
-                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
                 />
               </label>
 
@@ -4251,7 +4911,7 @@ export function AdminStudioView({
                   value={editAutomation.telegramBotToken}
                   onChange={(e) => setEditAutomation((prev) => ({...prev, telegramBotToken: e.target.value}))}
                   placeholder="123456:ABC-DEF..."
-                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
                 />
               </label>
 
@@ -4263,7 +4923,7 @@ export function AdminStudioView({
                   value={editAutomation.telegramChatId}
                   onChange={(e) => setEditAutomation((prev) => ({...prev, telegramChatId: e.target.value}))}
                   placeholder="-100..."
-                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
                 />
               </label>
 
@@ -4275,7 +4935,7 @@ export function AdminStudioView({
                   value={editAutomation.emailJsServiceId}
                   onChange={(e) => setEditAutomation((prev) => ({...prev, emailJsServiceId: e.target.value}))}
                   placeholder="service_..."
-                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
                 />
               </label>
 
@@ -4287,7 +4947,7 @@ export function AdminStudioView({
                   value={editAutomation.emailJsTemplateId}
                   onChange={(e) => setEditAutomation((prev) => ({...prev, emailJsTemplateId: e.target.value}))}
                   placeholder="template_..."
-                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
                 />
               </label>
 
@@ -4299,7 +4959,7 @@ export function AdminStudioView({
                   value={editAutomation.emailJsPublicKey}
                   onChange={(e) => setEditAutomation((prev) => ({...prev, emailJsPublicKey: e.target.value}))}
                   placeholder="public_key..."
-                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                  className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
                 />
               </label>
             </div>
@@ -4309,7 +4969,7 @@ export function AdminStudioView({
 
       {/* Tab 7 (Primary Admin ONLY): Appearance Studio, Brightness Slider, Announcement Bar & Maintenance Mode */}
       {tab === 'appearance' && isPrimaryAdmin && (
-        <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
+        <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -4359,7 +5019,7 @@ export function AdminStudioView({
             </div>
           </div>
 
-          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] p-4 space-y-2">
+          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] p-4 space-y-2">
             <div className="flex items-center justify-between text-xs font-bold">
               <span>درجة سطوع العرض العام للموقع</span>
               <span className="tabular-nums text-[#006a46] dark:text-[#6cdba6]">{editAppearance.brightness}%</span>
@@ -4375,7 +5035,7 @@ export function AdminStudioView({
             />
           </div>
 
-          <div className="rounded-2xl bg-[#fffbf2] dark:bg-[#13201b] border border-[#f2be5e]/35 p-4 space-y-3">
+          <div className="rounded-2xl bg-[#fffbf2] dark:bg-[#243b32] border border-[#f2be5e]/35 p-4 space-y-3">
             <label className="flex items-center justify-between cursor-pointer">
               <span className="text-sm font-bold text-[#0e1d25] dark:text-white">
                 تفعيل شريط الإعلانات العلوي في الموقع
@@ -4394,7 +5054,7 @@ export function AdminStudioView({
               value={editAppearance.announcementText}
               onChange={(e) => setEditAppearance((prev) => ({...prev, announcementText: e.target.value}))}
               placeholder="نص الإعلان الهام للزوار (مثال: تم إضافة قسم البطاقات الدعوية الكلاسيكية بحلته الجديدة)..."
-              className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+              className="w-full min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
             />
             <input
               type="url"
@@ -4402,7 +5062,7 @@ export function AdminStudioView({
               value={editAppearance.announcementUrl || ''}
               onChange={(e) => setEditAppearance((prev) => ({...prev, announcementUrl: e.target.value}))}
               placeholder="رابط اختياري عند النقر على الإعلان (https://...)"
-              className="w-full min-h-[40px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-xs"
+              className="w-full min-h-[40px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-xs"
             />
           </div>
 
@@ -4454,16 +5114,27 @@ export function AdminStudioView({
 
       {/* Tab: Mother Oasis Editor & Zero-Audio-Storage Dictation / Transcription */}
       {tab === 'mother-oasis' && (
-        <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
-          <div className="space-y-1">
-            <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
-              <FolderHeart className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
-              <span>واحة الداعية الفاضلة أمي: أم محمد إكرام عبده علي</span>
-            </h2>
-            <p className="text-xs sm:text-sm text-[#3e4a42] dark:text-slate-300 leading-relaxed">
-              أداة ميسّرة للنشر النصي الخالص: تحدثي مباشرة أو ارفعي تسجيلاً صوتياً جاهزاً لتحويله فوراً إلى نص عربي محرر — دون حفظ أي ملفات صوتية نهائياً.
-            </p>
-          </div>
+        <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-1">
+                <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
+                  <FolderHeart className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
+                  <span>واحة وقصص الوالدة: أم محمد</span>
+                </h2>
+                <p className="text-xs sm:text-sm text-[#3e4a42] dark:text-slate-300 leading-relaxed">
+                  نشر وتحديث بالذكاء الاصطناعي أو يدوياً، مع إمكانية التحدث المباشر لتحويل الكلام إلى نص عربي محرر — دون حفظ أي ملفات صوتية أو أسماء شخصية.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={Boolean(aiGenBusySection)}
+                onClick={() => void handleAiGenerateSection('mother-oasis', oasisTitle, oasisChapter)}
+                className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#006a46] hover:bg-[#005235] disabled:opacity-60 text-white text-xs font-extrabold flex items-center gap-1.5"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>{aiGenBusySection === 'mother-oasis' ? 'جاري التوليد...' : 'تحديث / صياغة بالذكاء الاصطناعي'}</span>
+              </button>
+            </div>
 
           <div className="rounded-2xl bg-[#fffbf2] dark:bg-[#13221c] border border-[#f2be5e]/45 p-4 sm:p-5 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -4472,11 +5143,11 @@ export function AdminStudioView({
                 <select
                   value={oasisChapter}
                   onChange={(e) => setOasisChapter(e.target.value as MotherOasisChapter)}
-                  className="w-full min-h-[46px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-4 text-sm font-bold"
+                  className="w-full min-h-[46px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-4 text-sm font-bold"
                 >
-                  <option value="books">١. باب المؤلفات والكتب الدعوية والتربوية</option>
-                  <option value="lectures">٢. باب المحاضرات والدروس المفرغة</option>
-                  <option value="stories">٣. باب «قصص وعبر من واقع الحياة»</option>
+                  <option value="books">باب المؤلفات والكتب الدعوية والتربوية</option>
+                  <option value="lectures">باب المحاضرات والدروس المفرغة</option>
+                  <option value="stories">قصص أم محمد (قصص وعبر من واقع الحياة)</option>
                 </select>
               </label>
 
@@ -4487,7 +5158,7 @@ export function AdminStudioView({
                   value={oasisTitle}
                   onChange={(e) => setOasisTitle(e.target.value)}
                   placeholder="مثال: بر الوالدين وصلاح القلوب..."
-                  className="w-full min-h-[46px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-4 text-sm font-semibold"
+                  className="w-full min-h-[46px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-4 text-sm font-semibold"
                 />
               </label>
             </div>
@@ -4543,22 +5214,39 @@ export function AdminStudioView({
               value={oasisBody}
               onChange={(e) => setOasisBody(e.target.value)}
               placeholder="اكتبي النص هنا، أو اضغطي زر التحدث / رفع التسجيل ليُفرَّغ نصاً عربياً مضبوطاً دون حفظ أي تسجيل صوتي..."
-              className="w-full rounded-2xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 p-4 text-sm sm:text-base leading-[1.85] focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+              className="w-full rounded-2xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 p-4 text-sm sm:text-base leading-[1.85] focus:outline-none focus:ring-2 focus:ring-[#006a46]"
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs font-semibold text-[#6e7a71] dark:text-slate-400">
                 يُحفظ النص المحرر فقط في قاعدة البيانات ولا يُخزَّن أي مقطع صوتي على الخادم.
               </span>
-              <button
-                type="button"
-                disabled={oasisSaving}
-                onClick={() => void handlePublishMotherOasis()}
-                className="min-h-[48px] px-6 py-2.5 rounded-2xl bg-[#006a46] hover:bg-[#005235] disabled:opacity-60 text-white text-sm font-extrabold flex items-center gap-2 shadow-sm"
-              >
-                <Send className="w-4 h-4" />
-                <span>{oasisSaving ? 'جاري النشر...' : 'اعتماد ونشر النص في واحة أمي'}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {editingOasisId && (
+                  <button
+                    type="button"
+                    onClick={resetMotherOasisForm}
+                    className="min-h-[44px] px-4 py-2 rounded-2xl bg-slate-200 dark:bg-white/10 text-xs font-bold"
+                  >
+                    إلغاء التعديل
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={oasisSaving}
+                  onClick={() => void handlePublishMotherOasis()}
+                  className="min-h-[48px] px-6 py-2.5 rounded-2xl bg-[#006a46] hover:bg-[#005235] disabled:opacity-60 text-white text-sm font-extrabold flex items-center gap-2 shadow-sm"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>
+                    {oasisSaving
+                      ? 'جاري الحفظ...'
+                      : editingOasisId
+                        ? 'حفظ تعديل المادة في واحة أمي'
+                        : 'اعتماد ونشر النص في واحة أمي'}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -4573,7 +5261,7 @@ export function AdminStudioView({
                 {motherOasisItems.map((item) => (
                   <article
                     key={item.id}
-                    className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] p-4 flex items-start justify-between gap-3"
+                    className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-4 flex items-start justify-between gap-3"
                   >
                     <div className="space-y-1 min-w-0">
                       <span className="text-[11px] font-extrabold text-[#006a46] dark:text-[#6cdba6]">
@@ -4586,14 +5274,24 @@ export function AdminStudioView({
                       <h4 className="text-sm font-extrabold text-[#0e1d25] dark:text-white">{item.title}</h4>
                       <p className="text-xs text-[#3e4a42] dark:text-slate-300 line-clamp-2">{item.body}</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteMotherOasisItem(item.id)}
-                      aria-label={`حذف ${item.title}`}
-                      className="min-w-[38px] min-h-[38px] rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center shrink-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => startEditMotherOasis(item)}
+                        aria-label={`تعديل ${item.title}`}
+                        className="min-w-[38px] min-h-[38px] rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteMotherOasisItem(item.id)}
+                        aria-label={`حذف ${item.title}`}
+                        className="min-w-[38px] min-h-[38px] rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -4606,7 +5304,7 @@ export function AdminStudioView({
       {tab === 'deaf-mute' && (
         <div className="space-y-6">
           {/* Supervisor Controls for Deaf & Mute Peer Live Conversation & Conditional Link */}
-          <section className="rounded-3xl bg-white dark:bg-[#0d211a] border-2 border-[#006a46]/30 dark:border-[#6cdba6]/25 p-5 sm:p-6 shadow-xs space-y-5">
+          <section className="rounded-3xl bg-white dark:bg-[#223a32] border-2 border-[#006a46]/30 dark:border-[#6cdba6]/25 p-5 sm:p-6 shadow-xs space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-white/10 pb-3.5">
               <div>
                 <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -4621,21 +5319,21 @@ export function AdminStudioView({
                 <span className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30">
                   المتصلون الآن: {(dmRoom?.onlineCount ?? 0).toLocaleString('ar-EG')}
                 </span>
-                <span className="px-3 py-1.5 rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200 dark:border-white/10">
+                <span className="px-3 py-1.5 rounded-xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200 dark:border-white/10">
                   المعتمدون: {(dmRoom?.approvedCount ?? 0).toLocaleString('ar-EG')}
                 </span>
               </div>
             </div>
 
             {/* Publish / Hide Live Room Link */}
-            <div className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] p-4 space-y-3">
+            <div className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] p-4 space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input
                   type="text"
                   value={dmRoomTitleInput}
                   onChange={(e) => setDmRoomTitleInput(e.target.value)}
                   placeholder="عنوان اللقاء المباشر (مثال: جلسة حوار الصم والبكم)"
-                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm font-bold"
+                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm font-bold"
                 />
                 <input
                   type="url"
@@ -4643,7 +5341,7 @@ export function AdminStudioView({
                   value={dmRoomLinkInput}
                   onChange={(e) => setDmRoomLinkInput(e.target.value)}
                   placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                  className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -4691,7 +5389,7 @@ export function AdminStudioView({
                   {dmRoom.requests.map((req) => (
                     <div
                       key={req.id}
-                      className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] p-3 flex flex-wrap items-center justify-between gap-2.5"
+                      className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-3 flex flex-wrap items-center justify-between gap-2.5"
                     >
                       <div className="space-y-0.5">
                         <span className="text-sm font-extrabold text-[#0e1d25] dark:text-white block">
@@ -4755,7 +5453,7 @@ export function AdminStudioView({
                   </button>
                 )}
               </div>
-              <div className="h-44 overflow-y-auto rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-3 space-y-2">
+              <div className="h-44 overflow-y-auto rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-3 space-y-2">
                 {!dmRoom?.messages || dmRoom.messages.length === 0 ? (
                   <p className="text-xs text-[#6e7a71] dark:text-slate-400 text-center py-8">
                     لا توجد رسائل جماعية في الغرفة حالياً.
@@ -4767,7 +5465,7 @@ export function AdminStudioView({
                       className={`rounded-xl px-3 py-2 text-xs ${
                         m.senderRole === 'supervisor'
                           ? 'bg-[#006a46] text-white'
-                          : 'bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10'
+                          : 'bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10'
                       }`}
                     >
                       <span className="font-extrabold block opacity-85">{m.senderName}</span>
@@ -4788,7 +5486,7 @@ export function AdminStudioView({
                     }
                   }}
                   placeholder="اكتب رسالة توجيهية لجميع المتصلين في غرفة الصم والبكم..."
-                  className="flex-1 min-h-[40px] rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3 text-sm"
+                  className="flex-1 min-h-[40px] rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3 text-sm"
                 />
                 <button
                   type="button"
@@ -4801,36 +5499,47 @@ export function AdminStudioView({
             </div>
           </section>
 
-          <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
+          <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="space-y-1">
               <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
                 <HandHeart className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
-                <span>إدارة وتعديل فيديوهات قناة الصم والبكم (بإشراف م. يونس عبد الكريم)</span>
+                <span>إدارة وتعديل فيديوهات قسم الصم والبكم (بإشراف إدارة القسم)</span>
               </h2>
               <p className="text-xs text-[#6e7a71] dark:text-slate-400">
-                أضف أو عدّل روابط فيديوهات يوتيوب الدعوية بلغة الإشارة والترجمة النصية لتظهر مباشرة في قسم الصم والبكم.
+                أضف أو عدّل روابط فيديوهات يوتيوب بلغة الإشارة، أو ولّد شرحاً بصرياً بالذكاء الاصطناعي ليظهر مباشرة في قسم الصم والبكم.
               </p>
             </div>
-            {editingDmId && (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={resetDeafMuteForm}
-                className="text-xs font-extrabold text-rose-600 hover:underline"
+                disabled={Boolean(aiGenBusySection)}
+                onClick={() => void handleAiGenerateSection('deaf-mute', dmTitle, dmCategory)}
+                className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-[#e8f6ff] dark:bg-[#193027] text-[#006a46] dark:text-[#6cdba6] border border-[#006a46]/25 text-xs font-extrabold flex items-center gap-1.5"
               >
-                إلغاء تعديل الفيديو
+                <Sparkles className="w-4 h-4" />
+                <span>{aiGenBusySection === 'deaf-mute' ? 'جاري التوليد...' : 'توليد وصف بصري بالذكاء الاصطناعي'}</span>
               </button>
-            )}
+              {editingDmId && (
+                <button
+                  type="button"
+                  onClick={resetDeafMuteForm}
+                  className="text-xs font-extrabold text-rose-600 hover:underline"
+                >
+                  إلغاء تعديل الفيديو
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] p-4 space-y-3">
+          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] p-4 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input
                 type="text"
                 value={dmTitle}
                 onChange={(e) => setDmTitle(e.target.value)}
                 placeholder="عنوان الفيديو الدعوي..."
-                className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
               />
               <input
                 type="url"
@@ -4838,19 +5547,19 @@ export function AdminStudioView({
                 value={dmYoutube}
                 onChange={(e) => setDmYoutube(e.target.value)}
                 placeholder="https://youtube.com/watch?v=... أو youtu.be/..."
-                className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
               />
               <input
                 type="text"
                 value={dmCategory}
                 onChange={(e) => setDmCategory(e.target.value)}
                 placeholder="التصنيف (مثال: القرآن والإيمان)"
-                className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
               />
               <select
                 value={dmStatus}
                 onChange={(e) => setDmStatus(e.target.value as 'published' | 'upcoming')}
-                className="min-h-[42px] rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-3.5 text-sm font-bold"
+                className="min-h-[42px] rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-3.5 text-sm font-bold"
               >
                 <option value="published">منشور الآن (مع مشغّل يوتيوب)</option>
                 <option value="upcoming">قريباً (قيد التجهيز)</option>
@@ -4861,14 +5570,14 @@ export function AdminStudioView({
               value={dmDesc}
               onChange={(e) => setDmDesc(e.target.value)}
               placeholder="وصف بصري واضح وميسّر للمقطع..."
-              className="w-full rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 p-3 text-sm"
+              className="w-full rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 p-3 text-sm"
             />
             <textarea
               rows={2}
               value={dmBenefit}
               onChange={(e) => setDmBenefit(e.target.value)}
               placeholder="الفائدة المكتوبة أو الرسالة المرفقة بلغة واضحة (اختياري)..."
-              className="w-full rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 p-3 text-sm"
+              className="w-full rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 p-3 text-sm"
             />
             <button
               type="button"
@@ -4891,7 +5600,7 @@ export function AdminStudioView({
             {deafMuteVideos.map((v) => (
               <div
                 key={v.id}
-                className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] p-4 flex items-center justify-between gap-3"
+                className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-4 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0 space-y-1">
                   <span className="text-[11px] font-bold text-[#006a46] dark:text-[#6cdba6]">
@@ -4905,7 +5614,7 @@ export function AdminStudioView({
                     type="button"
                     onClick={() => startEditDeafMuteVideo(v)}
                     aria-label={`تعديل ${v.title}`}
-                    className="min-w-[38px] min-h-[38px] rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center"
+                    className="min-w-[38px] min-h-[38px] rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center"
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
@@ -4929,15 +5638,26 @@ export function AdminStudioView({
       {tab === 'adhkar-books' && (
         <div className="space-y-6">
           {/* Adhkar Manager */}
-          <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
-            <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white">
-              إضافة أذكار وأدعية مخصصة (محفوظة سحابياً)
-            </h2>
+          <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white">
+                إضافة أذكار وأدعية مخصصة (يدوياً أو بالذكاء الاصطناعي)
+              </h2>
+              <button
+                type="button"
+                disabled={Boolean(aiGenBusySection)}
+                onClick={() => void handleAiGenerateSection('adhkar', adhkarTitle, adhkarChapterId)}
+                className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-[#f3faf6] dark:bg-[#193027] text-[#006a46] dark:text-[#6cdba6] border border-[#006a46]/25 text-xs font-extrabold flex items-center gap-1.5"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>{aiGenBusySection === 'adhkar' ? 'جاري التوليد...' : 'اقتراح ذكر صحيح بالذكاء الاصطناعي'}</span>
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <select
                 value={adhkarChapterId}
                 onChange={(e) => setAdhkarChapterId(e.target.value)}
-                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3 text-xs font-bold"
+                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3 text-xs font-bold"
               >
                 <option value="ch1_morning_evening">١. أذكار الصباح والمساء</option>
                 <option value="ch2_wudu_prayer">٢. أذكار الوضوء والصلاة والمسجد</option>
@@ -4953,7 +5673,7 @@ export function AdminStudioView({
                 value={adhkarTitle}
                 onChange={(e) => setAdhkarTitle(e.target.value)}
                 placeholder="عنوان الذكر (اختياري)"
-                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm"
+                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm"
               />
               <input
                 type="number"
@@ -4962,7 +5682,7 @@ export function AdminStudioView({
                 value={adhkarCount}
                 onChange={(e) => setAdhkarCount(Math.max(1, Number(e.target.value) || 1))}
                 placeholder="العدد"
-                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm"
+                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm"
               />
             </div>
             <textarea
@@ -4970,14 +5690,14 @@ export function AdminStudioView({
               value={adhkarText}
               onChange={(e) => setAdhkarText(e.target.value)}
               placeholder="نص الذكر أو الدعاء..."
-              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] p-3.5 text-sm"
+              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] p-3.5 text-sm"
             />
             <input
               type="text"
               value={adhkarFadl}
               onChange={(e) => setAdhkarFadl(e.target.value)}
               placeholder="فضل الذكر أو التخريج الصحيح (اختياري)..."
-              className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm"
+              className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm"
             />
             <button
               type="button"
@@ -4993,7 +5713,7 @@ export function AdminStudioView({
                 {customAdhkar.map((d) => (
                   <div
                     key={d.id}
-                    className="rounded-xl bg-[#f4faff] dark:bg-[#081712] p-3 flex items-center justify-between gap-2"
+                    className="rounded-xl bg-[#f4faff] dark:bg-[#1b3029] p-3 flex items-center justify-between gap-2"
                   >
                     <p className="text-xs font-bold text-[#0e1d25] dark:text-white line-clamp-1">{d.text}</p>
                     <button
@@ -5010,15 +5730,26 @@ export function AdminStudioView({
           </section>
 
           {/* Cloud Library Books Manager */}
-          <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
-            <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white">
-              إضافة كتب ومراجع علمية سحابية للمكتبات
-            </h2>
+          <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white">
+                إضافة كتب ومراجع علمية سحابية للمكتبات (يدوياً أو بالذكاء الاصطناعي)
+              </h2>
+              <button
+                type="button"
+                disabled={Boolean(aiGenBusySection)}
+                onClick={() => void handleAiGenerateSection('book', bookTitle, bookSection)}
+                className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-[#f3faf6] dark:bg-[#193027] text-[#006a46] dark:text-[#6cdba6] border border-[#006a46]/25 text-xs font-extrabold flex items-center gap-1.5"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>{aiGenBusySection === 'book' ? 'جاري الاقتراح...' : 'توليد بطاقة كتاب بالذكاء الاصطناعي'}</span>
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <select
                 value={bookSection}
                 onChange={(e) => setBookSection(e.target.value as CustomBookItem['section'])}
-                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3 text-xs font-bold"
+                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3 text-xs font-bold"
               >
                 <option value="hajouri">مكتبة الشيخ يحيى بن علي الحجوري</option>
                 <option value="imams">مكتبة الأئمة الكبار</option>
@@ -5029,21 +5760,21 @@ export function AdminStudioView({
                 value={bookCategory}
                 onChange={(e) => setBookCategory(e.target.value)}
                 placeholder="التصنيف (مثال: العقيدة والمنهج)"
-                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm"
+                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm"
               />
               <input
                 type="text"
                 value={bookTitle}
                 onChange={(e) => setBookTitle(e.target.value)}
                 placeholder="اسم الكتاب أو الرسالة العلمية..."
-                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm"
+                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm"
               />
               <input
                 type="text"
                 value={bookAuthor}
                 onChange={(e) => setBookAuthor(e.target.value)}
                 placeholder="اسم المؤلف (من علماء أهل السنة المعتمدين)..."
-                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm"
+                className="min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm"
               />
             </div>
             <input
@@ -5052,14 +5783,14 @@ export function AdminStudioView({
               value={bookPdfUrl}
               onChange={(e) => setBookPdfUrl(e.target.value)}
               placeholder="coming_soon أو رابط PDF مباشر"
-              className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm"
+              className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm"
             />
             <textarea
               rows={2}
               value={bookSummary}
               onChange={(e) => setBookSummary(e.target.value)}
               placeholder="وصف مختصر لمحتوى الكتاب وفوائده..."
-              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] p-3 text-sm"
+              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] p-3 text-sm"
             />
             <button
               type="button"
@@ -5075,7 +5806,7 @@ export function AdminStudioView({
                 {customBooks.map((b) => (
                   <div
                     key={b.id}
-                    className="rounded-xl bg-[#f4faff] dark:bg-[#081712] p-3 flex items-center justify-between gap-2"
+                    className="rounded-xl bg-[#f4faff] dark:bg-[#1b3029] p-3 flex items-center justify-between gap-2"
                   >
                     <div>
                       <p className="text-xs font-extrabold text-[#0e1d25] dark:text-white">{b.title}</p>
@@ -5100,7 +5831,7 @@ export function AdminStudioView({
       {tab === 'live-support' && (
         <div className="space-y-6">
           {/* Hidden Google Meet Configuration */}
-          <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+          <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -5132,7 +5863,7 @@ export function AdminStudioView({
                     type="button"
                     disabled={meetConnecting}
                     onClick={() => void handleConnectGoogleMeet()}
-                    className="min-h-[42px] px-4 py-2 rounded-xl bg-white dark:bg-[#112921] border border-slate-300 dark:border-white/20 text-[#1f1f1f] dark:text-white text-xs font-bold flex items-center gap-2.5 shadow-xs hover:bg-slate-50 dark:hover:bg-[#17362b] transition-colors"
+                    className="min-h-[42px] px-4 py-2 rounded-xl bg-white dark:bg-[#28453b] border border-slate-300 dark:border-white/20 text-[#1f1f1f] dark:text-white text-xs font-bold flex items-center gap-2.5 shadow-xs hover:bg-slate-50 dark:hover:bg-[#17362b] transition-colors"
                   >
                     <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48" aria-hidden="true">
                       <path
@@ -5196,7 +5927,7 @@ export function AdminStudioView({
                   <button
                     type="button"
                     onClick={() => setConfirmReplaceMeetRoom(false)}
-                    className="min-h-[34px] px-3 rounded-lg bg-white dark:bg-[#0d211a] text-xs font-bold border border-slate-200 dark:border-white/15"
+                    className="min-h-[34px] px-3 rounded-lg bg-white dark:bg-[#223a32] text-xs font-bold border border-slate-200 dark:border-white/15"
                   >
                     إلغاء
                   </button>
@@ -5215,7 +5946,7 @@ export function AdminStudioView({
                       visibility: e.target.value as MeetVisibilityMode,
                     }))
                   }
-                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3 text-xs font-bold"
+                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3 text-xs font-bold"
                 >
                   <option value="hidden_admin_only">مخفي عن المشتركين (للمشرفين والدعوات الخاصة فقط)</option>
                   <option value="deaf_mute_invited">متاح لدعوات فئة الصم والبكم والمقابلات</option>
@@ -5233,14 +5964,14 @@ export function AdminStudioView({
                     setEditMeetConfig((prev) => ({...prev, activeRoomUrl: e.target.value}))
                   }
                   placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm"
+                  className="w-full min-h-[42px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm"
                 />
               </label>
             </div>
           </section>
 
           {/* Live WebSocket Sessions */}
-          <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+          <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
             <h2 className="text-base sm:text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
               <Radio className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
               <span>جلسات الدردشة الحية المباشرة ({liveSessions.length.toLocaleString('ar-EG')})</span>
@@ -5263,7 +5994,7 @@ export function AdminStudioView({
                         className={`w-full text-start rounded-2xl p-3 border transition-colors ${
                           active
                             ? 'bg-[#006a46] text-white border-[#006a46]'
-                            : 'bg-[#f4faff] dark:bg-[#112921] border-slate-200/70 dark:border-white/10'
+                            : 'bg-[#f4faff] dark:bg-[#28453b] border-slate-200/70 dark:border-white/10'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2 text-xs font-extrabold">
@@ -5284,7 +6015,7 @@ export function AdminStudioView({
                   })}
                 </div>
 
-                <div className="lg:col-span-8 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#f8fbf9] dark:bg-[#081712] p-4 space-y-3">
+                <div className="lg:col-span-8 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#f8fbf9] dark:bg-[#1b3029] p-4 space-y-3">
                   {(() => {
                     const currentSess =
                       liveSessions.find((s) => s.id === (selectedSessionId || liveSessions[0]?.id)) ||
@@ -5303,7 +6034,7 @@ export function AdminStudioView({
                               value={customMeetInviteUrl}
                               onChange={(e) => setCustomMeetInviteUrl(e.target.value)}
                               placeholder={editMeetConfig.activeRoomUrl || 'https://meet.google.com/...'}
-                              className="min-h-[34px] rounded-lg bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 px-2.5 text-xs w-44"
+                              className="min-h-[34px] rounded-lg bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 px-2.5 text-xs w-44"
                             />
                             {meetOAuthConnected && (
                               <button
@@ -5337,7 +6068,7 @@ export function AdminStudioView({
                                 className={`max-w-[85%] rounded-xl px-3 py-2 text-xs ${
                                   m.senderRole === 'admin'
                                     ? 'bg-[#006a46] text-white'
-                                    : 'bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10'
+                                    : 'bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10'
                                 }`}
                               >
                                 <span className="block text-[10px] font-bold opacity-80">{m.senderName}</span>
@@ -5359,7 +6090,7 @@ export function AdminStudioView({
                               }
                             }}
                             placeholder="اكتب رد المشرف المباشر..."
-                            className="flex-1 min-h-[40px] rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 px-3 text-sm"
+                            className="flex-1 min-h-[40px] rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 px-3 text-sm"
                           />
                           <button
                             type="button"
@@ -5377,6 +6108,261 @@ export function AdminStudioView({
             )}
           </section>
         </div>
+      )}
+
+      {/* Tab: Dawah Cards & Verified Hadiths AI + Manual Manager */}
+      {tab === 'dawah-cards' && (
+        <div className="space-y-5">
+          <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
+                  <span>تحديث وإدارة البطاقات الدعوية والأحاديث الصحيحة</span>
+                </h2>
+                <p className="text-xs text-[#6e7a71] dark:text-slate-400 mt-1">
+                  يتولى الموقع التوليد اليومي تلقائياً لجميع الزوار دون تكرار، ويمكنك التدخل الفوري للتجديد بالذكاء الاصطناعي أو إضافة بطاقات وأحاديث يدوياً.
+                </p>
+              </div>
+              {onRefreshDawahCardsAI && (
+                <button
+                  type="button"
+                  disabled={refreshingCardsAI}
+                  onClick={async () => {
+                    setRefreshingCardsAI(true);
+                    setAiCardsFeedback(null);
+                    try {
+                      const result = await onRefreshDawahCardsAI();
+                      setAiCardsFeedback({ok: result.ok, text: result.message});
+                      onNotify(result.message);
+                    } finally {
+                      setRefreshingCardsAI(false);
+                    }
+                  }}
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-[#006a46] hover:bg-[#005235] disabled:opacity-60 text-white text-xs sm:text-sm font-extrabold flex items-center gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshingCardsAI ? 'animate-spin' : ''}`} />
+                  <span>{refreshingCardsAI ? 'جاري التوليد...' : 'تحديث البطاقات والأحاديث بالذكاء الاصطناعي الآن'}</span>
+                </button>
+              )}
+            </div>
+
+            {aiCardsFeedback && (
+              <div
+                className={`rounded-xl px-4 py-2.5 text-xs font-bold ${
+                  aiCardsFeedback.ok
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-[#006a46] dark:text-[#6cdba6]'
+                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
+                }`}
+              >
+                {aiCardsFeedback.text}
+              </div>
+            )}
+
+            <div className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] p-4 sm:p-5 space-y-3.5 border border-slate-200/70 dark:border-white/10">
+              <h3 className="text-sm font-extrabold text-[#0e1d25] dark:text-white">
+                إضافة بطاقة دعوية أو حديث صحيح يدوياً
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  value={cardSpeakerInput}
+                  onChange={(e) => setCardSpeakerInput(e.target.value)}
+                  placeholder="الراوي أو القائل (مثال: قال رسول الله ﷺ:)"
+                  className="min-h-[44px] rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                />
+                <select
+                  value={cardCategoryInput}
+                  onChange={(e) => setCardCategoryInput(e.target.value)}
+                  className="min-h-[44px] rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 px-3.5 text-sm font-bold"
+                >
+                  <option value="أحاديث نبوية صحيحة">أحاديث نبوية صحيحة</option>
+                  <option value="عقيدة التوحيد">عقيدة التوحيد</option>
+                  <option value="رقائق ومواعظ">رقائق ومواعظ</option>
+                  <option value="أخلاق وآداب">أخلاق وآداب</option>
+                  <option value="دعاء وذكر">دعاء وذكر</option>
+                  <option value="قصص وعبر">قصص وعبر</option>
+                </select>
+              </div>
+              <textarea
+                rows={4}
+                value={cardLinesInput}
+                onChange={(e) => setCardLinesInput(e.target.value)}
+                placeholder="اكتب متن الحديث أو الموعظة (كل سطر يُعرض بلون أنيق داخل البطاقة الدعوية)..."
+                className="w-full rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 p-3.5 text-sm leading-relaxed"
+              />
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={cardSourceInput}
+                  onChange={(e) => setCardSourceInput(e.target.value)}
+                  placeholder="التخريج أو المصدر (مثال: متفق عليه / رواه مسلم / مجموع الفتاوى)"
+                  className="flex-1 min-h-[44px] rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 px-3.5 text-sm"
+                />
+                <button
+                  type="button"
+                  disabled={cardSaving}
+                  onClick={() => void handleSaveManualDawahCard()}
+                  className="min-h-[44px] px-5 py-2 rounded-xl bg-[#006a46] hover:bg-[#005235] disabled:opacity-60 text-white text-xs sm:text-sm font-extrabold shrink-0"
+                >
+                  {cardSaving
+                    ? 'جاري الحفظ...'
+                    : isPrimaryAdmin
+                      ? 'اعتماد ونشر البطاقة للزوار'
+                      : 'إرسال البطاقة لموافقة المسؤول الأول'}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <h3 className="text-sm font-extrabold text-[#0e1d25] dark:text-white">
+                البطاقات المضافة والمتجددة ({aiDawahCards.length.toLocaleString('ar-EG')})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto">
+                {aiDawahCards.map((c) => (
+                  <article
+                    key={c.id}
+                    className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-4 flex items-start justify-between gap-3"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <span className="text-[11px] font-extrabold text-[#006a46] dark:text-[#6cdba6]">
+                        {c.category} · {c.source}
+                      </span>
+                      <p className="text-xs font-extrabold text-[#0e1d25] dark:text-white">{c.speakerLine}</p>
+                      <p className="text-xs text-[#3e4a42] dark:text-slate-300 line-clamp-2">
+                        {c.lines.map((l) => l.text).join(' ')}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteDawahCard(c.id)}
+                      aria-label="حذف البطاقة"
+                      className="min-w-[36px] min-h-[36px] rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Tab: Content Approvals Queue (Primary Admin Approves/Rejects Supervisor Edits) */}
+      {tab === 'approvals' && (
+        <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-white/10 pb-3.5">
+            <div>
+              <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
+                <span>
+                  {isPrimaryAdmin
+                    ? 'سجل اعتماد تعديلات وإضافات المشرفين قبل النشر'
+                    : 'سجل طلباتك المرسلة لموافقة المسؤول الأول'}
+                </span>
+              </h2>
+              <p className="text-xs text-[#6e7a71] dark:text-slate-400 mt-0.5">
+                {isPrimaryAdmin
+                  ? 'لا يظهر أي تعديل أو إضافة من المشرفين في الموقع العام للزوار إلا بعد موافقتك هنا.'
+                  : 'يتم إرسال جميع الإضافات والتعديلات والحذف إلى المسؤول الأول، وعند موافقته تنشر مباشرة للزوار.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={loadingApprovals}
+              onClick={() => void loadApprovals()}
+              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold flex items-center gap-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingApprovals ? 'animate-spin' : ''}`} />
+              <span>تحديث القائمة</span>
+            </button>
+          </div>
+
+          {pendingApprovals.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 dark:border-white/15 p-8 text-center text-xs sm:text-sm text-[#6e7a71] dark:text-slate-400">
+              لا توجد طلبات تعديل أو إضافة معلّقة حالياً.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingApprovals.map((reqItem) => {
+                const isPending = reqItem.status === 'pending';
+                const statusLabel =
+                  reqItem.status === 'approved'
+                    ? 'تمت الموافقة والنشر'
+                    : reqItem.status === 'rejected'
+                      ? 'مرفوض'
+                      : 'بانتظار موافقة المسؤول الأول';
+                const statusColor =
+                  reqItem.status === 'approved'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                    : reqItem.status === 'rejected'
+                      ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
+                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200';
+
+                return (
+                  <article
+                    key={reqItem.id}
+                    className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-4 space-y-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                          <span className={`px-2 py-0.5 rounded-lg ${statusColor}`}>{statusLabel}</span>
+                          <span className="text-[#006389] dark:text-[#80cfff]">
+                            مقدم الطلب: {reqItem.submittedBy}
+                          </span>
+                          <span className="text-[#6e7a71] dark:text-slate-400">
+                            {new Date(reqItem.createdAt).toLocaleString('ar-EG')}
+                          </span>
+                        </div>
+                        <h3 className="text-sm font-extrabold text-[#0e1d25] dark:text-white">{reqItem.title}</h3>
+                        <p className="text-xs text-[#3e4a42] dark:text-slate-300 leading-relaxed">{reqItem.summary}</p>
+                        {reqItem.reviewNote && (
+                          <p className="text-[11px] font-bold text-[#7c5800] dark:text-[#f2be5e]">
+                            ملاحظة المراجعة: {reqItem.reviewNote}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {isPrimaryAdmin && isPending && (
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 border-t border-slate-200/60 dark:border-white/10">
+                        <input
+                          type="text"
+                          value={approvalNoteById[reqItem.id] || ''}
+                          onChange={(e) =>
+                            setApprovalNoteById((prev) => ({...prev, [reqItem.id]: e.target.value}))
+                          }
+                          placeholder="ملاحظة اختيارية للمشرف..."
+                          className="flex-1 min-h-[38px] rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 px-3 text-xs"
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={processingApprovalId === reqItem.id}
+                            onClick={() => void handleApproveContentRequest(reqItem.id)}
+                            className="min-h-[38px] px-4 rounded-xl bg-[#006a46] hover:bg-[#005235] disabled:opacity-60 text-white text-xs font-extrabold"
+                          >
+                            موافقة ونشر في الموقع
+                          </button>
+                          <button
+                            type="button"
+                            disabled={processingApprovalId === reqItem.id}
+                            onClick={() => void handleRejectContentRequest(reqItem.id)}
+                            className="min-h-[38px] px-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-xs font-extrabold"
+                          >
+                            رفض
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
         </div>
       </div>

@@ -37,7 +37,7 @@ export function AboutView({
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        <section className="card-3d lg:col-span-7 rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-5">
+        <section className="card-3d lg:col-span-7 rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-5">
           <div className="flex items-center gap-3">
             <div className="icon-3d w-10 h-10 rounded-2xl bg-[#008559] text-white flex items-center justify-center shrink-0">
               <BookOpen className="w-5 h-5" />
@@ -68,7 +68,7 @@ export function AboutView({
             )}
           </p>
 
-          <div className="bg-[#e8f6ff] dark:bg-[#112921] rounded-2xl p-4.5 flex items-start gap-3">
+          <div className="bg-[#e8f6ff] dark:bg-[#28453b] rounded-2xl p-4.5 flex items-start gap-3">
             <div className="icon-3d w-9 h-9 rounded-xl bg-[#ffdea8] text-[#271900] flex items-center justify-center shrink-0 mt-0.5">
               <Award className="w-5 h-5" />
             </div>
@@ -135,7 +135,7 @@ export function AboutView({
             return (
               <div
                 key={item.title}
-                className="card-3d rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 shadow-xs flex items-start gap-3.5"
+                className="card-3d rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 shadow-xs flex items-start gap-3.5"
               >
                 <div className={`icon-3d w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${item.tone}`}>
                   <Icon className="w-5 h-5" />
@@ -152,7 +152,7 @@ export function AboutView({
         </section>
       </div>
 
-      <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-5">
+      <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-[#0e1d25] dark:text-white">
             {tr('محطات من رحلتنا', 'Key Milestones')}
@@ -203,7 +203,7 @@ export function AboutView({
           ].map((stage) => (
             <div
               key={stage.year}
-              className="card-3d rounded-2xl bg-[#e8f6ff] dark:bg-[#112921] p-4 space-y-2.5 flex flex-col justify-between"
+              className="card-3d rounded-2xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 space-y-2.5 flex flex-col justify-between"
             >
               <div className="flex items-center gap-2.5">
                 <span
@@ -221,7 +221,7 @@ export function AboutView({
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
         <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-1 gap-3.5">
-          <div className="card-3d rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 text-center flex flex-col items-center justify-center">
+          <div className="card-3d rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 text-center flex flex-col items-center justify-center">
             <Clock className="w-6 h-6 text-[#006a46] dark:text-[#6cdba6] mb-2" />
             <span className="text-2xl font-bold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
               {tr('+10 أعوام', '10+ Years')}
@@ -230,7 +230,7 @@ export function AboutView({
               {tr('من البث والتذكير المستمر', 'Continuous beneficial outreach')}
             </span>
           </div>
-          <div className="card-3d rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 text-center flex flex-col items-center justify-center">
+          <div className="card-3d rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 text-center flex flex-col items-center justify-center">
             <Sparkles className="w-6 h-6 text-[#7c5800] dark:text-[#f2be5e] mb-2" />
             <span className="text-xl font-bold text-[#7c5800] dark:text-[#f2be5e]">
               {tr('محتوى موثق', 'Verified Sources')}
@@ -241,7 +241,7 @@ export function AboutView({
           </div>
         </div>
 
-        <section className="card-3d lg:col-span-8 rounded-3xl bg-[#23323b] dark:bg-[#0b231b] text-white p-6 shadow-md flex flex-col justify-between space-y-4">
+        <section className="card-3d lg:col-span-8 rounded-3xl bg-[#23323b] dark:bg-[#223a32] text-white p-6 shadow-md flex flex-col justify-between space-y-4">
           <div className="flex items-center gap-3">
             <div className="icon-3d w-11 h-11 rounded-full bg-[#7c5800]/40 text-[#ffdea8] flex items-center justify-center shrink-0">
               <HeartHandshake className="w-5 h-5" />

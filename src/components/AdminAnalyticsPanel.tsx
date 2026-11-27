@@ -27,7 +27,7 @@ function ArabicChartTooltip({
   return (
     <div
       dir="rtl"
-      className="rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/15 px-3.5 py-2.5 shadow-lg text-xs space-y-1.5"
+      className="rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/15 px-3.5 py-2.5 shadow-lg text-xs space-y-1.5"
     >
       <p className="font-bold text-[#0e1d25] dark:text-white border-b border-slate-100 dark:border-white/10 pb-1">
         {label}
@@ -89,7 +89,6 @@ export function AdminAnalyticsPanel({
   const totalAllInteractions = data
     ? data.totals.sermonsEngagement +
       data.totals.adhkarEngagement +
-      data.totals.motherAmens +
       (data.totals.periodVisitors || 0) +
       (data.totals.periodClicks || 0)
     : 0;
@@ -97,7 +96,7 @@ export function AdminAnalyticsPanel({
   return (
     <div className="space-y-5">
       {/* Header & Time Range Filter */}
-      <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-4">
+      <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-[#e8f6ff] dark:bg-[#133126] text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center shrink-0">
@@ -114,7 +113,7 @@ export function AdminAnalyticsPanel({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/80 dark:border-white/10">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/80 dark:border-white/10">
               {(
                 [
                   {val: 7, label: '٧ أيام'},
@@ -162,14 +161,14 @@ export function AdminAnalyticsPanel({
             {[1, 2, 3, 4, 5, 6].map((n) => (
               <div
                 key={n}
-                className="h-20 rounded-xl bg-[#f4faff] dark:bg-[#112921] animate-pulse border border-slate-200/60 dark:border-white/10"
+                className="h-20 rounded-xl bg-[#f4faff] dark:bg-[#28453b] animate-pulse border border-slate-200/60 dark:border-white/10"
               />
             ))}
           </div>
         ) : (
           data && (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="rounded-xl bg-[#eefaf3] dark:bg-[#081712] border border-[#006a46]/25 dark:border-white/10 p-3.5 space-y-1">
+              <div className="rounded-xl bg-[#eefaf3] dark:bg-[#1b3029] border border-[#006a46]/25 dark:border-white/10 p-3.5 space-y-1">
                 <div className="flex items-center justify-between text-xs text-[#3e4a42] dark:text-slate-400">
                   <span>إجمالي الزوار</span>
                   <Eye className="w-3.5 h-3.5 text-[#006a46] dark:text-[#6cdba6]" />
@@ -182,7 +181,7 @@ export function AdminAnalyticsPanel({
                 </p>
               </div>
 
-              <div className="rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-[#006389]/25 dark:border-white/10 p-3.5 space-y-1">
+              <div className="rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-[#006389]/25 dark:border-white/10 p-3.5 space-y-1">
                 <div className="flex items-center justify-between text-xs text-[#3e4a42] dark:text-slate-400">
                   <span>إجمالي النقرات</span>
                   <MousePointerClick className="w-3.5 h-3.5 text-[#006389] dark:text-[#80cfff]" />
@@ -195,7 +194,7 @@ export function AdminAnalyticsPanel({
                 </p>
               </div>
 
-              <div className="rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-3.5 space-y-1">
+              <div className="rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-3.5 space-y-1">
                 <div className="flex items-center justify-between text-xs text-[#3e4a42] dark:text-slate-400">
                   <span>تفاعل المواعظ</span>
                   <BookOpen className="w-3.5 h-3.5 text-[#006a46] dark:text-[#6cdba6]" />
@@ -209,7 +208,7 @@ export function AdminAnalyticsPanel({
                 </p>
               </div>
 
-              <div className="rounded-xl bg-[#fffbf2] dark:bg-[#081712] border border-[#f2be5e]/35 dark:border-white/10 p-3.5 space-y-1">
+              <div className="rounded-xl bg-[#fffbf2] dark:bg-[#1b3029] border border-[#f2be5e]/35 dark:border-white/10 p-3.5 space-y-1">
                 <div className="flex items-center justify-between text-xs text-[#3e4a42] dark:text-slate-400">
                   <span>تفاعل الأذكار والأدعية</span>
                   <Sparkles className="w-3.5 h-3.5 text-[#7c5800] dark:text-[#f2be5e]" />
@@ -223,7 +222,7 @@ export function AdminAnalyticsPanel({
                 </p>
               </div>
 
-              <div className="rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-3.5 space-y-1">
+              <div className="rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-3.5 space-y-1">
                 <div className="flex items-center justify-between text-xs text-[#3e4a42] dark:text-slate-400">
                   <span>الإعجابات والتعليقات</span>
                   <Heart className="w-3.5 h-3.5 text-[#006389] dark:text-[#80cfff]" />
@@ -234,18 +233,6 @@ export function AdminAnalyticsPanel({
                 <p className="text-[11px] text-[#6e7a71] dark:text-slate-400 tabular-nums">
                   إعجاب: {data.totals.sermonLikes.toLocaleString('ar-EG')} · تعليق:{' '}
                   {data.totals.sermonComments.toLocaleString('ar-EG')}
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-3.5 space-y-1">
-                <span className="text-xs text-[#3e4a42] dark:text-slate-400 block">
-                  تأمينات دعاء الوالدة
-                </span>
-                <p className="text-xl font-bold text-[#0e1d25] dark:text-white tabular-nums">
-                  {data.totals.motherAmens.toLocaleString('ar-EG')}
-                </p>
-                <p className="text-[11px] text-[#6e7a71] dark:text-slate-400">
-                  خلال آخر {days.toLocaleString('ar-EG')} يوماً
                 </p>
               </div>
             </div>
@@ -263,7 +250,7 @@ export function AdminAnalyticsPanel({
       {data && (
         <>
           {/* Chart 1: Monthly Area Chart comparing Sermons vs Adhkar */}
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-[#0e1d25] dark:text-white">
@@ -329,7 +316,7 @@ export function AdminAnalyticsPanel({
           </section>
 
           {/* Visitors & Clicks Daily Trend */}
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
             <div>
               <h3 className="text-sm sm:text-base font-bold text-[#0e1d25] dark:text-white">
                 حركة الزوار والنقرات اليومية
@@ -393,7 +380,7 @@ export function AdminAnalyticsPanel({
           </section>
 
           {/* Chart 2: Daily Stacked Breakdown Bar Chart */}
-          <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
+          <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
             <div>
               <h3 className="text-sm sm:text-base font-bold text-[#0e1d25] dark:text-white">
                 تفصيل أنواع التفاعل اليومي خلال الفترة
@@ -458,7 +445,7 @@ export function AdminAnalyticsPanel({
 
           {/* Chart 3 & 4: Categories Distribution */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
+            <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-[#0e1d25] dark:text-white">
                   تفاعل أقسام المواعظ والمحتوى
@@ -493,7 +480,7 @@ export function AdminAnalyticsPanel({
               </div>
             </section>
 
-            <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
+            <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-3">
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-[#0e1d25] dark:text-white">
                   تفاعل أقسام الأدعية والأذكار
@@ -526,6 +513,60 @@ export function AdminAnalyticsPanel({
               </div>
             </section>
           </div>
+
+          {/* Section Entries & Interactions Breakdown */}
+          {Array.isArray(data.sectionAnalytics) && data.sectionAnalytics.length > 0 && (
+            <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-4">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-[#0e1d25] dark:text-white">
+                  عدد الداخلين إلى كل قسم وإجمالي التفاعلات
+                </h3>
+                <p className="text-xs text-[#6e7a71] dark:text-slate-400">
+                  إحصائية تراكمية دقيقة لعدد مرات دخول كل قسم من أقسام المنصة والتفاعلات المسجلة داخله
+                </p>
+              </div>
+
+              <div className="w-full h-[290px]" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={data.sectionAnalytics}
+                    layout="vertical"
+                    margin={{top: 6, right: 16, left: 10, bottom: 6}}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} tick={{fontSize: 11, fill: '#64748b'}} />
+                    <YAxis
+                      type="category"
+                      dataKey="label"
+                      width={126}
+                      tick={{fontSize: 11, fill: '#64748b'}}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip content={<ArabicChartTooltip />} />
+                    <Legend wrapperStyle={{fontSize: 12}} />
+                    <Bar dataKey="visits" name="عدد مرات الدخول" fill="#006a46" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="shares" name="المشاركات" fill="#d99b1e" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="interactions" name="التفاعلات" fill="#006389" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                {data.sectionAnalytics.map((sec) => (
+                  <div
+                    key={sec.id}
+                    className="rounded-xl bg-[#f8faf9] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs"
+                  >
+                    <span className="font-bold text-[#0e1d25] dark:text-white truncate">{sec.label}</span>
+                    <span className="text-[11px] font-semibold text-[#006a46] dark:text-[#6cdba6] tabular-nums whitespace-nowrap shrink-0">
+                      دخول: {sec.visits.toLocaleString('ar-EG')} · مشاركة: {(sec.shares || 0).toLocaleString('ar-EG')} · تفاعل: {sec.interactions.toLocaleString('ar-EG')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>

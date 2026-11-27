@@ -62,13 +62,13 @@ export function FloatingReadingBar({
     ? 'bg-[#071913]/95 text-[#e6f5ee] border-emerald-700/45 shadow-2xl'
     : isForcedLight
       ? 'bg-[#fffdf8]/95 text-[#0e1d25] border-[#d6c9a5] shadow-2xl'
-      : 'bg-white/95 dark:bg-[#081a14]/95 text-[#0e1d25] dark:text-[#e3f3fe] border-slate-200/90 dark:border-white/15 shadow-2xl';
+      : 'bg-white/95 dark:bg-[#1b3029]/95 text-[#0e1d25] dark:text-[#e3f3fe] border-slate-200/90 dark:border-white/15 shadow-2xl';
 
   const subtleChipClass = isForcedDark
     ? 'bg-white/10 hover:bg-white/15 text-[#e6f5ee]'
     : isForcedLight
       ? 'bg-[#f4efe1] hover:bg-[#ebe3ce] text-[#1b241f]'
-      : 'bg-[#e8f6ff] hover:bg-[#d5ecfb] dark:bg-[#112921] dark:hover:bg-[#16352b] text-[#0e1d25] dark:text-[#e3f3fe]';
+      : 'bg-[#e8f6ff] hover:bg-[#d5ecfb] dark:bg-[#28453b] dark:hover:bg-[#16352b] text-[#0e1d25] dark:text-[#e3f3fe]';
 
   const mutedTextClass = isForcedDark
     ? 'text-emerald-200/75'

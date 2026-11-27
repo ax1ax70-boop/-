@@ -17,13 +17,15 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import {Fragment, useCallback, useEffect, useMemo, useState} from 'react';
-import type {QuranAyah, QuranSurah} from '../types';
+import type {Post, QuranAyah, QuranSurah} from '../types';
 import {useI18n} from '../utils/i18n';
 import {
   resolveFontFamilyCss,
   resolveFontSizeSpec,
   useReadingPrefs,
 } from '../utils/readingPrefs';
+import {getPublicSiteUrl} from '../utils/storage';
+import {trackInteraction} from '../utils/telemetry';
 import {FloatingReadingBar} from './FloatingReadingBar';
 import {ReadingControlsBar} from './ReadingControlsBar';
 
@@ -155,9 +157,11 @@ type ActiveDrawer = null | 'index' | 'search' | 'bookmarks' | 'settings';
 
 export function QuranView({
   initialPage,
+  onShareCard,
   onNotify,
 }: {
   initialPage?: number;
+  onShareCard?: (post: Post) => void;
   onNotify: (msg: string) => void;
 }) {
   const {tr, isEn, formatNumber} = useI18n();
@@ -424,15 +428,38 @@ export function QuranView({
     }
   };
 
+  const shareAyahAsCard = () => {
+    if (!selectedAyah || !onShareCard) return;
+    const shareUrl = getPublicSiteUrl(`/?tab=quran&page=${selectedAyah.page}`);
+    onShareCard({
+      id: `quran_${selectedAyah.surahNumber}_${selectedAyah.ayahNumber}`,
+      title: `﴿ ${selectedAyah.text} ﴾`,
+      excerpt: `﴿ ${selectedAyah.text} ﴾`,
+      body: `﴿ ${selectedAyah.text} ﴾${tafsirText ? `\n\n${tafsirText}` : ''}`,
+      author: `${selectedAyah.surahName} · آية ${toArabicDigits(selectedAyah.ayahNumber)}`,
+      sourceLabel: 'المصحف الشريف',
+      category: 'آيات كريمة',
+      mediaType: 'quote',
+      cardTheme: 'emerald',
+      likes: 0,
+      commentsCount: 0,
+      publishedAtLabel: 'القرآن الكريم',
+      createdAt: new Date().toISOString(),
+      shareUrl,
+    });
+  };
+
   const shareAyahAndTafsir = async () => {
     if (!selectedAyah) return;
-    const tafsirSection = tafsirText
-      ? `\n\n📖 ${tafsirEdition || 'التفسير'}:\n${tafsirText.slice(0, 400)}`
-      : '';
-    const text = `﴿ ${selectedAyah.text} ﴾\n[${selectedAyah.surahName} - آية ${toArabicDigits(selectedAyah.ayahNumber)}]${tafsirSection}\n\n📲 عبر موقع مواعظ وعبر`;
+    const pageUrl = getPublicSiteUrl(`/?tab=quran&page=${selectedAyah.page}`);
+    const cleanAyah = selectedAyah.text.replace(/\s+/g, ' ').trim();
+    const shortAyah =
+      cleanAyah.length > 105 ? `${cleanAyah.slice(0, 102).trim()}...` : cleanAyah;
+    const text = `﴿ ${shortAyah} ﴾\n[${selectedAyah.surahName} - آية ${toArabicDigits(selectedAyah.ayahNumber)}]\n\n📲 لقراءة الآية كاملة والتفسير عبر الباركود أو الرابط:\n${pageUrl}\n— موقع مواعظ وعبر`;
     if (navigator.share) {
       try {
-        await navigator.share({title: selectedAyah.surahName, text});
+        await navigator.share({title: selectedAyah.surahName, text, url: pageUrl});
+        trackInteraction('sermon_share', 'quran', 'quran');
         return;
       } catch {
         // Fallback to clipboard
@@ -440,7 +467,8 @@ export function QuranView({
     }
     try {
       await navigator.clipboard.writeText(text);
-      onNotify('تم نسخ الآية والتفسير للمشاركة في الواتساب والمنصات');
+      trackInteraction('sermon_share', 'quran', 'quran');
+      onNotify('تم نسخ الآية المختصرة مع رابط المصحف للمشاركة');
     } catch {
       onNotify('تم تجهيز نص المشاركة');
     }
@@ -458,7 +486,7 @@ export function QuranView({
       ? 'bg-[#071611] text-[#eaf5ef] border-emerald-800/60'
       : rTheme === 'light'
         ? 'bg-[#fffdf6] text-[#1b241f] border-[#d6c9a5]'
-        : 'bg-[#fffdf6] dark:bg-[#0b1c16] text-[#1b241f] dark:text-[#eef6f2] border-[#dfd3b2] dark:border-white/10';
+        : 'bg-[#fffdf6] dark:bg-[#203830] text-[#1b241f] dark:text-[#eef6f2] border-[#dfd3b2] dark:border-white/10';
 
   const mushafInnerFrameClass =
     rTheme === 'dark'
@@ -505,7 +533,7 @@ export function QuranView({
   if (loading) {
     return (
       <div className="space-y-4 pb-10">
-        <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-10 text-center space-y-2">
+        <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-10 text-center space-y-2">
           <BookOpen className="w-8 h-8 text-[#006a46] dark:text-[#6cdba6] mx-auto" />
           <p className="text-base font-bold text-[#0e1d25] dark:text-white">
             {tr('جاري تجهيز المصحف الشريف كاملاً...', 'Loading the complete Noble Quran...')}
@@ -520,7 +548,7 @@ export function QuranView({
 
   if (error || !surahs) {
     return (
-      <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 p-8 text-center space-y-4">
+      <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 p-8 text-center space-y-4">
         <p className="text-base font-bold text-[#0e1d25] dark:text-white">
           {tr('تعذر تحميل صفحات المصحف الشريف حالياً', 'Unable to load the Noble Quran right now')}
         </p>
@@ -702,7 +730,7 @@ export function QuranView({
 
         {/* Inline Tafsir Panel Below Canvas When Enabled */}
         {prefs.showInlineTafsir && selectedAyah && (
-          <div className="mt-6 rounded-2xl border border-[#006a46]/25 bg-white/90 dark:bg-[#081712]/90 p-5 space-y-3">
+          <div className="mt-6 rounded-2xl border border-[#006a46]/25 bg-white/90 dark:bg-[#1b3029]/90 p-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6]">
                 التفسير الميسّر/المباشر · {selectedAyah.surahName} آية {toArabicDigits(selectedAyah.ayahNumber)}
@@ -831,7 +859,7 @@ export function QuranView({
 
       {/* Drawer 1: Surah & Juz Selector */}
       {activeDrawer === 'index' && (
-        <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm space-y-4">
+        <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <button
@@ -840,7 +868,7 @@ export function QuranView({
                 className={`min-h-[40px] px-4 rounded-xl text-xs font-bold ${
                   indexSubTab === 'surahs'
                     ? 'bg-[#006a46] text-white'
-                    : 'bg-[#e8f6ff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                    : 'bg-[#e8f6ff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                 }`}
               >
                 فهرس السور ({toArabicDigits(114)})
@@ -851,7 +879,7 @@ export function QuranView({
                 className={`min-h-[40px] px-4 rounded-xl text-xs font-bold ${
                   indexSubTab === 'juz'
                     ? 'bg-[#006a46] text-white'
-                    : 'bg-[#e8f6ff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                    : 'bg-[#e8f6ff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                 }`}
               >
                 فهرس الأجزاء ({toArabicDigits(30)})
@@ -865,7 +893,7 @@ export function QuranView({
                   value={surahQuery}
                   onChange={(e) => setSurahQuery(e.target.value)}
                   placeholder="ابحث باسم السورة أو رقمها..."
-                  className="w-full min-h-[42px] ps-9 pe-3 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                  className="w-full min-h-[42px] ps-9 pe-3 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                 />
               </div>
             )}
@@ -933,7 +961,7 @@ export function QuranView({
 
       {/* Drawer 2: Unified Ayah Text Search & Direct Page Jump */}
       {activeDrawer === 'search' && (
-        <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm space-y-4">
+        <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2 relative">
               <Search className="w-4 h-4 text-[#6e7a71] absolute start-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -942,7 +970,7 @@ export function QuranView({
                 value={ayahSearchQuery}
                 onChange={(e) => setAyahSearchQuery(e.target.value)}
                 placeholder="ابحث بأي كلمة أو عبارة من القرآن الكريم (بدون تشكيل)..."
-                className="w-full min-h-[44px] ps-10 pe-4 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                className="w-full min-h-[44px] ps-10 pe-4 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
               />
             </div>
 
@@ -965,7 +993,7 @@ export function QuranView({
                 value={pageInput}
                 onChange={(e) => setPageInput(e.target.value)}
                 placeholder={`صفحة (١ - ٦٠٤)`}
-                className="flex-1 min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3 text-center text-sm font-bold tabular-nums focus:outline-none"
+                className="flex-1 min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3 text-center text-sm font-bold tabular-nums focus:outline-none"
               />
               <button
                 type="submit"
@@ -1011,14 +1039,14 @@ export function QuranView({
 
       {/* Drawer 3: Bookmarks & Favorites */}
       {activeDrawer === 'bookmarks' && (
-        <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm space-y-4">
+        <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <input
               type="text"
               value={bookmarkNote}
               onChange={(e) => setBookmarkNote(e.target.value)}
               placeholder="اسم العلامة المرجعية (اختياري، مثل: ورد الفجر)..."
-              className="flex-1 min-w-[200px] min-h-[44px] px-3.5 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] text-sm focus:outline-none"
+              className="flex-1 min-w-[200px] min-h-[44px] px-3.5 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-sm focus:outline-none"
             />
             <button
               type="button"
@@ -1039,7 +1067,7 @@ export function QuranView({
               {bookmarks.map((bm) => (
                 <div
                   key={bm.id}
-                  className="p-3 rounded-xl bg-[#fffbf2] dark:bg-[#112921] border border-amber-500/25 flex items-center justify-between gap-2"
+                  className="p-3 rounded-xl bg-[#fffbf2] dark:bg-[#28453b] border border-amber-500/25 flex items-center justify-between gap-2"
                 >
                   <button
                     type="button"
@@ -1071,9 +1099,9 @@ export function QuranView({
 
       {/* Drawer 4: Reading & Tafsir Settings */}
       {activeDrawer === 'settings' && (
-        <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm space-y-4">
+        <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#eef7f3] dark:bg-[#112921]">
+            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#eef7f3] dark:bg-[#28453b]">
               <button
                 type="button"
                 onClick={() => setPrefs((p) => ({...p, mode: 'page'}))}
@@ -1129,7 +1157,7 @@ export function QuranView({
             type="button"
             disabled={prefs.page <= 1}
             onClick={() => goToPage(prefs.page - 1)}
-            className="min-h-[48px] px-4 py-2.5 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 disabled:opacity-40 text-sm font-bold flex items-center gap-2"
+            className="min-h-[48px] px-4 py-2.5 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 disabled:opacity-40 text-sm font-bold flex items-center gap-2"
           >
             <PrevIcon className="w-4 h-4" />
             <span>{tr('الصفحة السابقة', 'Previous Page')}</span>
@@ -1158,7 +1186,7 @@ export function QuranView({
               const prev = surahs.find((s) => s.n === prefs.surah - 1);
               if (prev) selectSurah(prev);
             }}
-            className="min-h-[48px] px-4 py-2.5 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 disabled:opacity-40 text-sm font-bold flex items-center gap-2"
+            className="min-h-[48px] px-4 py-2.5 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 disabled:opacity-40 text-sm font-bold flex items-center gap-2"
           >
             <PrevIcon className="w-4 h-4" />
             <span>السورة السابقة</span>
@@ -1194,7 +1222,7 @@ export function QuranView({
             role="dialog"
             aria-label="التفسير المعتمد للآية"
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:max-w-2xl max-h-[85vh] rounded-t-3xl sm:rounded-3xl bg-white dark:bg-[#0b1f18] border border-slate-200/80 dark:border-white/15 shadow-2xl flex flex-col overflow-hidden"
+            className="w-full sm:max-w-2xl max-h-[85vh] rounded-t-3xl sm:rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/15 shadow-2xl flex flex-col overflow-hidden"
           >
             <header className="px-5 py-4 bg-gradient-to-l from-[#006a46] to-[#005235] text-white flex items-center justify-between gap-3">
               <div>
@@ -1218,7 +1246,7 @@ export function QuranView({
               <div
                 dir="rtl"
                 style={{fontFamily: activeFontFamily}}
-                className="rounded-2xl bg-[#fffdf6] dark:bg-[#071611] border border-[#d6c9a5] dark:border-emerald-800/60 p-4 text-center text-lg sm:text-xl text-[#1b241f] dark:text-[#eef7f2] leading-loose"
+                className="rounded-2xl bg-[#fffdf6] dark:bg-[#182b24] border border-[#d6c9a5] dark:border-emerald-800/60 p-4 text-center text-lg sm:text-xl text-[#1b241f] dark:text-[#eef7f2] leading-loose"
               >
                 ﴿ {selectedAyah.text} ﴾
               </div>
@@ -1233,7 +1261,7 @@ export function QuranView({
                     className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
                       prefs.mufassir === m.id
                         ? 'bg-[#006a46] text-white'
-                        : 'bg-[#eef7f3] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                        : 'bg-[#eef7f3] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                     }`}
                   >
                     {m.label}
@@ -1281,7 +1309,7 @@ export function QuranView({
               </div>
 
               {/* Tafsir Body */}
-              <div className="rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-4 sm:p-5 space-y-2">
+              <div className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-4 sm:p-5 space-y-2">
                 <p className="text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6]">
                   {tafsirEdition || MUFASSIR_OPTIONS.find((m) => m.id === prefs.mufassir)?.label}
                 </p>
@@ -1301,8 +1329,26 @@ export function QuranView({
               </div>
             </div>
 
-            <footer className="px-5 py-3.5 border-t border-slate-200/70 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+            <footer className="px-5 py-3.5 border-t border-slate-200/70 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {onShareCard && (
+                  <button
+                    type="button"
+                    onClick={shareAyahAsCard}
+                    className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#7c5800] hover:bg-[#614400] text-white text-xs font-extrabold flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>مشاركة كبطاقة + باركود</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void shareAyahAndTafsir()}
+                  className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>مشاركة مختصرة</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => void copyAyahAndTafsir()}
@@ -1310,14 +1356,6 @@ export function QuranView({
                 >
                   <Copy className="w-3.5 h-3.5" />
                   <span>نسخ الآية والتفسير</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void shareAyahAndTafsir()}
-                  className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>مشاركة</span>
                 </button>
               </div>
               <button
@@ -1335,7 +1373,7 @@ export function QuranView({
 
       {/* Fullscreen Focused Reading Mode Overlay */}
       {isFullscreen && (
-        <div className="fixed inset-0 z-50 bg-[#fffdf6] dark:bg-[#05100c] overflow-y-auto pt-[44px] pb-24 px-3 sm:px-8">
+        <div className="fixed inset-0 z-50 bg-[#fffdf6] dark:bg-[#162822] overflow-y-auto pt-[44px] pb-24 px-3 sm:px-8">
           <div className="max-w-4xl mx-auto space-y-4">
             <div className="flex items-center justify-between gap-3 py-2">
               <span className="text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6]">
@@ -1353,12 +1391,12 @@ export function QuranView({
             {mushafCanvas}
           </div>
 
-          <div className="fixed bottom-4 left-4 right-4 max-w-md mx-auto rounded-2xl bg-white/95 dark:bg-[#0b1f18]/95 backdrop-blur-md border border-slate-200 dark:border-white/15 shadow-xl px-4 py-2.5 flex items-center justify-between">
+          <div className="fixed bottom-4 left-4 right-4 max-w-md mx-auto rounded-2xl bg-white/95 dark:bg-[#223a32]/95 backdrop-blur-md border border-slate-200 dark:border-white/15 shadow-xl px-4 py-2.5 flex items-center justify-between">
             <button
               type="button"
               disabled={prefs.page <= 1}
               onClick={() => goToPage(prefs.page - 1)}
-              className="min-h-[40px] px-3 rounded-xl bg-[#eef7f3] dark:bg-[#112921] text-[#006a46] dark:text-[#6cdba6] disabled:opacity-40 text-xs font-bold flex items-center gap-1"
+              className="min-h-[40px] px-3 rounded-xl bg-[#eef7f3] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] disabled:opacity-40 text-xs font-bold flex items-center gap-1"
             >
               <PrevIcon className="w-4 h-4" />
               <span>السابقة</span>

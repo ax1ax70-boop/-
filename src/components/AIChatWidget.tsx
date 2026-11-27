@@ -385,7 +385,7 @@ export function AIChatWidget({
             role="dialog"
             aria-label={tr('مساعد مواعظ وعبر الدعوي', 'Mawaedh Dawah Guide')}
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:max-w-lg h-full max-h-[calc(100dvh-80px)] sm:h-[620px] rounded-3xl bg-white dark:bg-[#091c15] border border-slate-200/80 dark:border-white/15 shadow-2xl flex flex-col overflow-hidden"
+            className="w-full sm:max-w-lg h-full max-h-[calc(100dvh-80px)] sm:h-[620px] rounded-3xl bg-white dark:bg-[#1d332b] border border-slate-200/80 dark:border-white/15 shadow-2xl flex flex-col overflow-hidden"
           >
             {/* Header */}
             <header className="bg-gradient-to-l from-[#006a46] via-[#007c53] to-[#005235] text-white px-4 pt-3.5 pb-3 space-y-3 shrink-0">
@@ -480,10 +480,10 @@ export function AIChatWidget({
             {panelTab === 'chat' ? (
               <>
                 {/* Conversation Scroll Body */}
-                <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-[#f4faff] dark:bg-[#06120e]">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-[#f4faff] dark:bg-[#162822]">
                   {messages.length === 0 && (
                     <div className="space-y-3.5">
-                      <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 space-y-2 card-3d">
+                      <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 space-y-2 card-3d">
                         <div className="flex items-center gap-2 text-xs font-bold text-[#006a46] dark:text-[#6cdba6]">
                           <MessageSquareText className="w-4 h-4" />
                           <span>{tr('أهلاً بك! كيف أساعدك اليوم؟', 'Welcome! How can I assist you today?')}</span>
@@ -539,7 +539,7 @@ export function AIChatWidget({
                               key={prompt}
                               type="button"
                               onClick={() => void sendMessage(prompt)}
-                              className="text-start min-h-[42px] px-3.5 py-2 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 hover:border-[#006a46] text-xs font-semibold text-[#0e1d25] dark:text-slate-200 transition-colors"
+                              className="text-start min-h-[42px] px-3.5 py-2 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 hover:border-[#006a46] text-xs font-semibold text-[#0e1d25] dark:text-slate-200 transition-colors"
                             >
                               {prompt}
                             </button>
@@ -557,7 +557,7 @@ export function AIChatWidget({
                           className={`max-w-[88%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed space-y-2 ${
                             isUser
                               ? 'bg-[#006a46] text-white rounded-be-sm'
-                              : 'bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-100 rounded-bs-sm shadow-xs'
+                              : 'bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-100 rounded-bs-sm shadow-xs'
                           }`}
                         >
                           <div className="whitespace-pre-line">{msg.text}</div>
@@ -589,7 +589,7 @@ export function AIChatWidget({
 
                   {loading && (
                     <div className="flex justify-start">
-                      <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 px-4 py-3 text-xs font-semibold text-[#006a46] dark:text-[#6cdba6] flex items-center gap-2">
+                      <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 px-4 py-3 text-xs font-semibold text-[#006a46] dark:text-[#6cdba6] flex items-center gap-2">
                         <Sparkles className="w-4 h-4 animate-spin" />
                         <span>{tr('جاري البحث وتجهيز الإجابة...', 'Thinking & finding details...')}</span>
                       </div>
@@ -607,7 +607,7 @@ export function AIChatWidget({
                 {/* Chat Composer */}
                 <form
                   onSubmit={handleSubmitChat}
-                  className="p-3 bg-white dark:bg-[#091c15] border-t border-slate-200/80 dark:border-white/10 flex items-center gap-2 shrink-0"
+                  className="p-3 bg-white dark:bg-[#1d332b] border-t border-slate-200/80 dark:border-white/10 flex items-center gap-2 shrink-0"
                 >
                   <input
                     type="text"
@@ -615,7 +615,7 @@ export function AIChatWidget({
                     onChange={(e) => setInput(e.target.value)}
                     placeholder={tr('اكتب سؤالك هنا...', 'Ask anything about the site...')}
                     disabled={loading}
-                    className="flex-1 min-h-[44px] px-3.5 rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+                    className="flex-1 min-h-[44px] px-3.5 rounded-xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
                   />
                   <button
                     type="submit"
@@ -629,13 +629,13 @@ export function AIChatWidget({
               </>
             ) : panelTab === 'live' ? (
               <>
-                <div className="px-4 py-2.5 bg-[#eefaf3] dark:bg-[#0c211a] border-b border-slate-200/70 dark:border-white/10 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div className="px-4 py-2.5 bg-[#eefaf3] dark:bg-[#223a32] border-b border-slate-200/70 dark:border-white/10 flex flex-wrap items-center justify-between gap-2 shrink-0">
                   <input
                     type="text"
                     value={liveVisitorName}
                     onChange={(e) => setLiveVisitorName(e.target.value)}
                     placeholder={tr('اسمك الاختياري...', 'Your name (optional)')}
-                    className="min-h-[34px] px-3 rounded-lg bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-xs flex-1"
+                    className="min-h-[34px] px-3 rounded-lg bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-xs flex-1"
                   />
                   <button
                     type="button"
@@ -663,9 +663,9 @@ export function AIChatWidget({
                   </div>
                 )}
 
-                <div ref={liveScrollRef} className="flex-1 overflow-y-auto p-4 space-y-2.5 bg-[#f4faff] dark:bg-[#06120e]">
+                <div ref={liveScrollRef} className="flex-1 overflow-y-auto p-4 space-y-2.5 bg-[#f4faff] dark:bg-[#162822]">
                   {liveMessages.length === 0 ? (
-                    <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 text-xs text-[#3e4a42] dark:text-slate-300 leading-relaxed space-y-2">
+                    <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 text-xs text-[#3e4a42] dark:text-slate-300 leading-relaxed space-y-2">
                       <p className="font-bold text-[#0e1d25] dark:text-white">
                         {tr('قناة التواصل المباشر والاستفسارات', 'Direct Communication Channel')}
                       </p>
@@ -691,7 +691,7 @@ export function AIChatWidget({
                           className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm space-y-1 ${
                             m.senderRole === 'visitor'
                               ? 'bg-[#006a46] text-white'
-                              : 'bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-100'
+                              : 'bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-100'
                           }`}
                         >
                           <span className="block text-[10px] font-bold opacity-80">{m.senderName}</span>
@@ -704,14 +704,14 @@ export function AIChatWidget({
 
                 <form
                   onSubmit={sendLiveMessage}
-                  className="p-3 bg-white dark:bg-[#091c15] border-t border-slate-200/80 dark:border-white/10 flex items-center gap-2 shrink-0"
+                  className="p-3 bg-white dark:bg-[#1d332b] border-t border-slate-200/80 dark:border-white/10 flex items-center gap-2 shrink-0"
                 >
                   <input
                     type="text"
                     value={liveInput}
                     onChange={(e) => setLiveInput(e.target.value)}
                     placeholder={tr('اكتب رسالتك المباشرة هنا...', 'Write your direct message...')}
-                    className="flex-1 min-h-[44px] px-3.5 rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+                    className="flex-1 min-h-[44px] px-3.5 rounded-xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
                   />
                   <button
                     type="submit"
@@ -725,9 +725,9 @@ export function AIChatWidget({
               </>
             ) : (
               /* Direct Submission Form to Manager Inbox */
-              <div className="flex-1 overflow-y-auto p-4 bg-[#f4faff] dark:bg-[#06120e] space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 bg-[#f4faff] dark:bg-[#162822] space-y-4">
                 {formSuccess ? (
-                  <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-[#006a46]/30 p-6 text-center space-y-4 shadow-xs">
+                  <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-[#006a46]/30 p-6 text-center space-y-4 shadow-xs">
                     <div className="w-12 h-12 rounded-2xl bg-[#eefaf3] dark:bg-[#133126] text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center mx-auto">
                       <CheckCircle2 className="w-6 h-6" />
                     </div>
@@ -753,7 +753,7 @@ export function AIChatWidget({
                       <button
                         type="button"
                         onClick={() => setPanelTab('chat')}
-                        className="min-h-[42px] px-4 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold"
+                        className="min-h-[42px] px-4 py-2 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold"
                       >
                         {tr('العودة إلى مساعدك الدعوي', 'Back to Dawah Guide')}
                       </button>
@@ -761,7 +761,7 @@ export function AIChatWidget({
                   </div>
                 ) : (
                   <form onSubmit={handleSubmitDirectMessage} className="space-y-3.5">
-                    <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-3.5 text-xs text-[#3e4a42] dark:text-slate-300 leading-relaxed">
+                    <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-3.5 text-xs text-[#3e4a42] dark:text-slate-300 leading-relaxed">
                       {tr(
                         'تصل جميع مقترحات تطوير الموقع، وطلبات العمل أو التسجيل في الفريق التطوعي، ورسائل الدعم والمراسلين إلى القسم السري الخاص بالمشرفين والمدراء فقط.',
                         'All site development proposals, work/volunteer team requests, and support messages go directly to the private Supervisors & Managers inbox.',
@@ -790,7 +790,7 @@ export function AIChatWidget({
                             className={`min-h-[42px] px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
                               active
                                 ? 'bg-[#006a46] text-white shadow-xs'
-                                : 'bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
+                                : 'bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
                             }`}
                           >
                             <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -805,11 +805,11 @@ export function AIChatWidget({
                       value={senderName}
                       onChange={(e) => setSenderName(e.target.value)}
                       placeholder={tr('الاسم أو اللقب (اختياري)', 'Your name (optional)')}
-                      className="w-full min-h-[42px] px-3.5 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+                      className="w-full min-h-[42px] px-3.5 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
                     />
 
                     {subKind === 'team_join' && (
-                      <div className="space-y-2.5 rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-3">
+                      <div className="space-y-2.5 rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-3">
                         <div className="space-y-1">
                           <label className="text-[11px] font-bold text-[#6e7a71] dark:text-slate-400 block">
                             {tr('مجال الانضمام للفريق', 'Team Role / Field')}
@@ -817,7 +817,7 @@ export function AIChatWidget({
                           <select
                             value={teamField}
                             onChange={(e) => setTeamField(e.target.value)}
-                            className="w-full min-h-[40px] rounded-xl bg-[#f4faff] dark:bg-[#112921] px-3 text-xs font-semibold text-[#0e1d25] dark:text-white focus:outline-none"
+                            className="w-full min-h-[40px] rounded-xl bg-[#f4faff] dark:bg-[#28453b] px-3 text-xs font-semibold text-[#0e1d25] dark:text-white focus:outline-none"
                           >
                             <option value="التدقيق اللغوي والشرعي وتخريج الأحاديث">
                               {tr('التدقيق اللغوي والشرعي وتخريج الأحاديث', 'Proofreading & Hadith Verification')}
@@ -857,7 +857,7 @@ export function AIChatWidget({
                                 className={`min-h-[36px] rounded-lg text-xs font-bold ${
                                   teamHours === h.id
                                     ? 'bg-[#006a46] text-white'
-                                    : 'bg-[#f4faff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                                    : 'bg-[#f4faff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                                 }`}
                               >
                                 {h.label}
@@ -894,7 +894,7 @@ export function AIChatWidget({
                                   'Write your suggestion or idea for the platform...',
                                 )
                       }
-                      className="w-full p-3.5 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+                      className="w-full p-3.5 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
                     />
 
                     <input
@@ -913,7 +913,7 @@ export function AIChatWidget({
                               'Email or contact handle for reply (optional)',
                             )
                       }
-                      className="w-full min-h-[42px] px-3.5 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+                      className="w-full min-h-[42px] px-3.5 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
                     />
 
                     {formError && (

@@ -12,7 +12,7 @@ export function LiveStatsStrip({compact = false}: {compact?: boolean}) {
 
   if (compact) {
     return (
-      <div className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-4 space-y-3">
+      <div className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#223a32] p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-bold text-[#0e1d25] dark:text-white flex items-center gap-2">
             <Activity className="w-4 h-4 text-[#006a46] dark:text-[#6cdba6]" />

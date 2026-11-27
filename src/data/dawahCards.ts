@@ -1,6 +1,21 @@
 import type {ClassicDawahCard, PdfBookItem, VisitorReviewItem} from '../types.ts';
 
+export const DAWAH_CARDS_RESET_EPOCH = '2026-11-27T15:10:00.000Z';
+
+export function isConciseClassicCard(card: ClassicDawahCard | null | undefined): boolean {
+  if (!card || !Array.isArray(card.lines) || card.lines.length < 2 || card.lines.length > 4) {
+    return false;
+  }
+  const lineTexts = card.lines.map((l) => (l?.text || '').trim()).filter(Boolean);
+  if (lineTexts.length < 2 || lineTexts.length > 4) return false;
+  if (lineTexts.some((t) => t.length > 44 || t.split(/\s+/).length > 7)) return false;
+  const fullText = lineTexts.join(' ');
+  const totalWords = fullText.split(/\s+/).filter(Boolean).length;
+  return totalWords <= 20 && fullText.length <= 125;
+}
+
 export const CLASSIC_DAWAH_CARDS: ClassicDawahCard[] = [
+  // ١) خواطر ومواعظ قصيرة
   {
     id: 'card_ibn_hazm',
     speakerLine: 'قَالَ الإِمَامُ ابْنُ حَزْمٍ رَحِمَهُ اللَّهُ',
@@ -10,30 +25,7 @@ export const CLASSIC_DAWAH_CARDS: ClassicDawahCard[] = [
       {text: 'نَاصِحٍ صَدِيقٌ', color: '#1E3A8A'},
     ],
     source: 'الأَخْلَاقُ وَالسِّيَرُ (٤٢)',
-    category: 'الأخوة والنصح',
-  },
-  {
-    id: 'card_malik_ibn_anas',
-    speakerLine: 'قَالَ الإِمَامُ مَالِكُ بْنُ أَنَسٍ رَحِمَهُ اللَّهُ :',
-    lines: [
-      {text: 'لَا تُكْثِرِ الشُّخُوصَ', color: '#991B1B'},
-      {text: 'أَيْ : الْخُرُوجَ - مِنْ بَيْتِكَ', color: '#1E3A8A'},
-      {text: 'إِلَّا لِأَمْرٍ لَا بُدَّ مِنْهُ', color: '#065F46'},
-      {text: 'وَلَا تَجْلِسْ فِي مَجْلِسٍ لَا تَسْتَفِيدُ مِنْهُ عِلْمًا', color: '#991B1B'},
-    ],
-    source: 'تَرْتِيبُ المَدَارِكِ [٦٣/٢]',
-    category: 'آداب طالب العلم',
-  },
-  {
-    id: 'card_mujahid',
-    speakerLine: 'قَالَ مُجَاهِدٌ رَحِمَهُ اللَّهُ',
-    lines: [
-      {text: 'الأَوَّابُ الحَفِيظُ', color: '#111827'},
-      {text: 'الَّذِي يُذْنِبُ الذَّنْبَ سِرًّا', color: '#991B1B'},
-      {text: 'ثُمَّ يَتُوبُ مِنْهُ سِرًّا', color: '#065F46'},
-    ],
-    source: 'كِتَابُ التَّوْبَةِ (٢٣٩)',
-    category: 'التوبة والإنابة',
+    category: 'خواطر ومواعظ قصيرة',
   },
   {
     id: 'card_ibn_alqayyim',
@@ -44,32 +36,18 @@ export const CLASSIC_DAWAH_CARDS: ClassicDawahCard[] = [
       {text: 'مِنْ نَتَنِ رِيحِهِ', color: '#991B1B'},
     ],
     source: '[الدَّاءُ وَالدَّوَاءُ ص ٢٥٠]',
-    category: 'الصدق والأخلاق',
+    category: 'خواطر ومواعظ قصيرة',
   },
   {
-    id: 'card_ibn_baz',
-    speakerLine: 'الشَّيْخُ عَبْدُ العَزِيزِ بْنُ بَازٍ رَحِمَهُ اللَّهُ',
+    id: 'card_mujahid',
+    speakerLine: 'قَالَ مُجَاهِدٌ رَحِمَهُ اللَّهُ',
     lines: [
-      {text: 'مِنْ أَسْبَابِ', color: '#111827'},
-      {text: 'سُوءِ الخَاتِمَةِ', color: '#991B1B'},
-      {text: 'التَّخَلُّفُ عَنْ صَلَاةِ', color: '#111827'},
-      {text: 'الجَمَاعَةِ فِي المَسْجِدِ', color: '#111827'},
+      {text: 'الأَوَّابُ الحَفِيظُ', color: '#111827'},
+      {text: 'الَّذِي يُذْنِبُ الذَّنْبَ سِرًّا', color: '#991B1B'},
+      {text: 'ثُمَّ يَتُوبُ مِنْهُ سِرًّا', color: '#065F46'},
     ],
-    source: '«فَتَاوَى نُورٌ عَلَى الدَّرْبِ» «149»',
-    category: 'الصلاة والعبادة',
-  },
-  {
-    id: 'card_malik_ibn_dinar',
-    speakerLine: 'قَالَ مَالِكُ بْنُ دِينَارٍ رَحِمَهُ اللَّهُ :',
-    lines: [
-      {text: 'كُلُّ أَخٍ', color: '#991B1B'},
-      {text: 'وَجَلِيسٍ وَصَاحِبٍ', color: '#111827'},
-      {text: 'لَا تَسْتَفِيدُ مِنْهُ خَيْرًا', color: '#065F46'},
-      {text: 'فِي أَمْرِ دِينِكَ', color: '#111827'},
-      {text: 'فَفِرَّ مِنْهُ', color: '#991B1B'},
-    ],
-    source: 'مَوْسُوعَةُ ابْنِ أَبِي الدُّنْيَا (٥٣٣/٦)',
-    category: 'الصحبة الصالحة',
+    source: 'كِتَابُ التَّوْبَةِ (٢٣٩)',
+    category: 'خواطر ومواعظ قصيرة',
   },
   {
     id: 'card_ibn_umar',
@@ -80,18 +58,163 @@ export const CLASSIC_DAWAH_CARDS: ClassicDawahCard[] = [
       {text: 'مِنْ أَحَدٍ', color: '#1E3A8A'},
     ],
     source: '[تَفْسِيرُ البَغَوِيِّ ١-٦٠]',
-    category: 'التواضع والتقوى',
+    category: 'خواطر ومواعظ قصيرة',
   },
   {
-    id: 'card_anas_ibn_malik',
-    speakerLine: 'قَالَ أَنَسُ بْنُ مَالِكٍ رَضِيَ اللَّهُ عَنْهُ',
+    id: 'card_light_hasan_days',
+    speakerLine: 'قَالَ الحَسَنُ البَصْرِيُّ رَحِمَهُ اللَّهُ',
     lines: [
-      {text: '« إِذَا لَقِيتَ امْرَأَةً', color: '#B45309'},
-      {text: 'فَغَمِّضْ عَيْنَيْكَ', color: '#111827'},
-      {text: 'حَتَّى تَمْضِيَ »', color: '#B45309'},
+      {text: 'إِنَّمَا أَنْتَ أَيَّامٌ', color: '#111827'},
+      {text: 'كُلَّمَا ذَهَبَ يَوْمٌ', color: '#991B1B'},
+      {text: 'ذَهَبَ بَعْضُكَ', color: '#1E3A8A'},
     ],
-    source: 'الزُّهْدُ لِلإِمَامِ أَحْمَدَ ص ٢٥٩',
-    category: 'العفة وغض البصر',
+    source: 'حِلْيَةُ الأَوْلِيَاءِ (١٤٨/٢)',
+    category: 'خواطر ومواعظ قصيرة',
+  },
+  {
+    id: 'card_khatera_tumanina',
+    speakerLine: 'خَاطِرَةٌ إِيمَانِيَّةٌ هَادِئَةٌ',
+    lines: [
+      {text: 'طُمَأْنِينَةُ القَلْبِ تَبْدَأُ', color: '#065F46'},
+      {text: 'بِذِكْرِ اللَّهِ تَعَالَى', color: '#111827'},
+      {text: 'وَحُسْنِ الظَّنِّ بِهِ', color: '#1E3A8A'},
+    ],
+    source: 'خَوَاطِرُ وَمَوَاعِظُ قَصِيرَةٌ',
+    category: 'خواطر ومواعظ قصيرة',
+  },
+  {
+    id: 'card_khatera_khiyarah',
+    speakerLine: 'إِشْرَاقَةُ يَقِينٍ',
+    lines: [
+      {text: 'لَا تَحْزَنْ عَلَى فَوْتٍ', color: '#1E3A8A'},
+      {text: 'فَخِيَرَةُ اللَّهِ لَكَ', color: '#111827'},
+      {text: 'أَرْحَمُ وَأَجْمَلُ', color: '#065F46'},
+    ],
+    source: 'خَوَاطِرُ وَمَوَاعِظُ قَصِيرَةٌ',
+    category: 'خواطر ومواعظ قصيرة',
+  },
+
+  // ٢) أبيات شعر عربية فصيحة
+  {
+    id: 'card_poem_shafii_days',
+    speakerLine: 'قَالَ الإِمَامُ الشَّافِعِيُّ رَحِمَهُ اللَّهُ',
+    lines: [
+      {text: 'دَعِ الأَيَّامَ تَفْعَلُ مَا تَشَاءُ', color: '#1E3A8A'},
+      {text: 'وَطِبْ نَفْسًا إِذَا حَكَمَ القَضَاءُ', color: '#065F46'},
+    ],
+    source: 'دِيوَانُ الإِمَامِ الشَّافِعِيِّ',
+    category: 'أبيات شعر عربية',
+  },
+  {
+    id: 'card_poem_shafii_nush',
+    speakerLine: 'قَالَ الإِمَامُ الشَّافِعِيُّ رَحِمَهُ اللَّهُ',
+    lines: [
+      {text: 'تَعَمَّدْنِي بِنُصْحِكَ فِي انْفِرَادِي', color: '#111827'},
+      {text: 'وَجَنِّبْنِي النَّصِيحَةَ فِي الجَمَاعَهْ', color: '#1E3A8A'},
+    ],
+    source: 'دِيوَانُ الإِمَامِ الشَّافِعِيِّ',
+    category: 'أبيات شعر عربية',
+  },
+  {
+    id: 'card_poem_abu_atahiya',
+    speakerLine: 'قَالَ أَبُو العَتَاهِيَةِ رَحِمَهُ اللَّهُ',
+    lines: [
+      {text: 'تَرْجُو النَّجَاةَ وَلَمْ تَسْلُكْ مَسَالِكَهَا', color: '#991B1B'},
+      {text: 'إِنَّ السَّفِينَةَ لَا تَجْرِي عَلَى اليَبَسِ', color: '#111827'},
+    ],
+    source: 'دِيوَانُ أَبِي العَتَاهِيَةِ',
+    category: 'أبيات شعر عربية',
+  },
+  {
+    id: 'card_poem_ibn_mubarak',
+    speakerLine: 'يُنْسَبُ لِلْأَدَبِ السَّلَفِيِّ فِي الصُّحْبَةِ',
+    lines: [
+      {text: 'إِذَا صَاحَبْتَ فِي أَيَّامِ بُؤْسٍ', color: '#065F46'},
+      {text: 'فَلَا تَنْسَ المَوَدَّةَ فِي الرَّخَاءِ', color: '#111827'},
+    ],
+    source: 'مِنْ رَوَائِعِ الشِّعْرِ العَرَبِيِّ',
+    category: 'أبيات شعر عربية',
+  },
+
+  // ٣) طرائف حقيقية موثقة
+  {
+    id: 'card_turfah_shabi_iblis',
+    speakerLine: 'سُئِلَ الإِمَامُ الشَّعْبِيُّ رَحِمَهُ اللَّهُ',
+    lines: [
+      {text: 'مَا اسْمُ امْرَأَةِ إِبْلِيسَ؟', color: '#1E3A8A'},
+      {text: 'فَأَجَابَ مُبْتَسِمًا:', color: '#111827'},
+      {text: 'ذَاكَ عُرْسٌ مَا شَهِدْنَاهُ!', color: '#065F46'},
+    ],
+    source: 'أَخْبَارُ الظُّرَفَاءِ لِابْنِ الجَوْزِيِّ',
+    category: 'طرائف موثقة',
+  },
+  {
+    id: 'card_turfah_shabi_ihram',
+    speakerLine: 'مِنْ طَرَائِفِ الإِمَامِ الشَّعْبِيِّ رَحِمَهُ اللَّهُ',
+    lines: [
+      {text: 'سُئِلَ: أَيَحُكُّ المُحْرِمُ جَسَدَهُ؟ قَالَ: نَعَمْ', color: '#111827'},
+      {text: 'قِيلَ: فَكَمْ يَحُكُّ؟', color: '#1E3A8A'},
+      {text: 'قَالَ: حَتَّى يَبْدُوَ العَظْمُ!', color: '#B45309'},
+    ],
+    source: 'أَخْبَارُ الأَذْكِيَاءِ لِابْنِ الجَوْزِيِّ',
+    category: 'طرائف موثقة',
+  },
+  {
+    id: 'card_turfah_asmai_farah',
+    speakerLine: 'مِنْ نَوَادِرِ الأَصْمَعِيِّ رَحِمَهُ اللَّهُ',
+    lines: [
+      {text: 'سَأَلْتُ أَعْرَابِيًّا: أَتَهْمِزُ الفَأْرَةَ؟', color: '#1E3A8A'},
+      {text: 'فَأَجَابَنِي بِسُرْعَةٍ:', color: '#111827'},
+      {text: 'القِطُّ يَهْمِزُهَا!', color: '#065F46'},
+    ],
+    source: 'عُيُونُ الأَخْبَارِ لِابْنِ قُتَيْبَةَ',
+    category: 'طرائف موثقة',
+  },
+  {
+    id: 'card_turfah_ahnaf_hilm',
+    speakerLine: 'قِيلَ لِلْأَحْنَفِ بْنِ قَيْسٍ رَحِمَهُ اللَّهُ',
+    lines: [
+      {text: 'مِمَّنْ تَعَلَّمْتَ الحِلْمَ؟', color: '#1E3A8A'},
+      {text: 'قَالَ: مِنْ قَيْسِ بْنِ عَاصِمٍ؛', color: '#111827'},
+      {text: 'رَأَيْتُهُ يُحَدِّثُ وَالعَقْرَبُ تَلْسَعُهُ!', color: '#991B1B'},
+    ],
+    source: 'البَيَانُ وَالتَّبْيِينُ لِلْجَاحِظِ',
+    category: 'طرائف موثقة',
+  },
+
+  // ٤) أحاديث نبوية صحيحة
+  {
+    id: 'card_light_kalimah',
+    speakerLine: 'قَالَ رَسُولُ اللَّهِ ﷺ',
+    lines: [
+      {text: '« الكَلِمَةُ', color: '#1E3A8A'},
+      {text: 'الطَّيِّبَةُ', color: '#111827'},
+      {text: 'صَدَقَةٌ »', color: '#065F46'},
+    ],
+    source: 'صَحِيحُ البُخَارِيِّ (٢٩٨٩)',
+    category: 'أحاديث نبوية صحيحة',
+  },
+  {
+    id: 'card_light_quran_best',
+    speakerLine: 'قَالَ رَسُولُ اللَّهِ ﷺ',
+    lines: [
+      {text: '« خَيْرُكُمْ مَنْ تَعَلَّمَ', color: '#065F46'},
+      {text: 'القُرْآنَ', color: '#111827'},
+      {text: 'وَعَلَّمَهُ »', color: '#1E3A8A'},
+    ],
+    source: 'صَحِيحُ البُخَارِيِّ (٥٠٢٧)',
+    category: 'أحاديث نبوية صحيحة',
+  },
+  {
+    id: 'card_light_taqwa_wherever',
+    speakerLine: 'قَالَ رَسُولُ اللَّهِ ﷺ',
+    lines: [
+      {text: '« اتَّقِ اللَّهَ', color: '#1E3A8A'},
+      {text: 'حَيْثُمَا', color: '#111827'},
+      {text: 'كُنْتَ »', color: '#065F46'},
+    ],
+    source: 'سُنَنُ التِّرْمِذِيِّ (١٩٨٧) · حَسَنٌ صَحِيحٌ',
+    category: 'أحاديث نبوية صحيحة',
   },
 ];
 
@@ -217,7 +340,7 @@ export const INITIAL_VISITOR_REVIEWS: VisitorReviewItem[] = [
   },
   {
     id: 'rev_3',
-    name: 'سليمان المكي',
+    name: 'مستفيد من البطاقات',
     role: 'مهتم بالبطاقات الدعوية',
     rating: 5,
     comment: 'البطاقات الدعوية الكلاسيكية وتحميلها بصيغة PNG ساعدتنا كثيراً في نشر كلام السلف في مجموعات الأسرة.',

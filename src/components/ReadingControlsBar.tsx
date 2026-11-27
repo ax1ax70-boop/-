@@ -44,7 +44,7 @@ export function ReadingControlsBar({
 
   return (
     <div
-      className={`rounded-2xl bg-[#f4faff] dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 ${
+      className={`rounded-2xl bg-[#f4faff] dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 ${
         compact ? 'p-3.5 space-y-3' : 'p-4 sm:p-5 space-y-3.5'
       }`}
     >
@@ -76,7 +76,7 @@ export function ReadingControlsBar({
             <span>{tr('حجم الخط', 'Font Size')}</span>
             <span className="text-[#006a46] dark:text-[#6cdba6]">{activeSizeMeta.label}</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-white dark:bg-[#112921] border border-slate-200/70 dark:border-white/10 rounded-xl p-1">
+          <div className="flex items-center gap-1.5 bg-white dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10 rounded-xl p-1">
             <button
               type="button"
               onClick={stepDown}
@@ -126,7 +126,7 @@ export function ReadingControlsBar({
           <span className="text-[11px] font-semibold text-[#3e4a42] dark:text-slate-300 block">
             {tr('نوع الخط العربي', 'Arabic Font Style')}
           </span>
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-white dark:bg-[#112921] border border-slate-200/70 dark:border-white/10 rounded-xl p-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar bg-white dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10 rounded-xl p-1">
             {families.map((fam) => {
               const active = fontFamily === fam.id;
               return (

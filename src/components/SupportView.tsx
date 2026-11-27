@@ -21,7 +21,7 @@ export function SupportView({
   visitorsCount = 0,
   onlineVisitorsCount = 1,
   clicksCount = 0,
-  motherPrayersCount = 0,
+  registeredMembersCount = 0,
   onMessageSubmitted,
   onNotify,
 }: {
@@ -31,6 +31,7 @@ export function SupportView({
   onlineVisitorsCount?: number;
   clicksCount?: number;
   motherPrayersCount?: number;
+  registeredMembersCount?: number;
   onMessageSubmitted?: () => void;
   onNotify: (msg: string) => void;
 }) {
@@ -105,13 +106,16 @@ export function SupportView({
       const data = (await res.json()) as {ticketNumber?: string};
       if (!res.ok) throw new Error();
       setSugText('');
-      if (data.ticketNumber) {
-        setLastIssuedTicket(data.ticketNumber);
+      const cleanNo = (data.ticketNumber || '').replace(/^#?(?:REQ-?)?/i, '');
+      if (cleanNo) {
+        setLastIssuedTicket(cleanNo);
       }
       onMessageSubmitted?.();
       void loadTickets(ticketQuery);
       onNotify(
-        `تم إرسال طلبك بنجاح برقم متابعة ${data.ticketNumber || '#REQ'} مع إشعار فوري صامت للمشرف`,
+        cleanNo
+          ? `تم إرسال طلبك بنجاح برقم ${cleanNo} مع إشعار فوري صامت للمشرف`
+          : 'تم إرسال طلبك بنجاح مع إشعار فوري صامت للمشرف',
       );
     } catch {
       onNotify(tr('تعذر إرسال الرسالة حالياً، حاول لاحقاً', 'Unable to send right now. Please try later.'));
@@ -145,13 +149,16 @@ export function SupportView({
       const data = (await res.json()) as {ticketNumber?: string};
       if (!res.ok) throw new Error();
       setVolSkills('');
-      if (data.ticketNumber) {
-        setLastIssuedTicket(data.ticketNumber);
+      const cleanNo = (data.ticketNumber || '').replace(/^#?(?:REQ-?)?/i, '');
+      if (cleanNo) {
+        setLastIssuedTicket(cleanNo);
       }
       onMessageSubmitted?.();
       void loadTickets(ticketQuery);
       onNotify(
-        `تم تسجيل طلبك برقم متابعة ${data.ticketNumber || '#REQ'} وإبلاغ الإدارة في الخلفية بنجاح`,
+        cleanNo
+          ? `تم تسجيل طلبك برقم ${cleanNo} وإبلاغ الإدارة في الخلفية بنجاح`
+          : 'تم تسجيل طلبك وإبلاغ الإدارة في الخلفية بنجاح',
       );
     } catch {
       onNotify(tr('تعذر إرسال الطلب حالياً', 'Unable to submit request right now.'));
@@ -189,8 +196,8 @@ export function SupportView({
             </h2>
             <p className="text-xs sm:text-sm text-[#3e4a42] dark:text-slate-300">
               {tr(
-                'جميع المقترحات والاستفسارات تُرسل سراً عبر نموذج التذاكر أدناه وتُتابع برقم طلب (#REQ) دون نشر أي بيانات تواصل شخصية.',
-                'All inquiries and suggestions are routed securely through our #REQ ticket system with full privacy.',
+                'جميع المقترحات والاستفسارات تُرسل سراً عبر نموذج التذاكر أدناه وتُتابع برقم طلب دون نشر أي بيانات تواصل شخصية.',
+                'All inquiries and suggestions are routed securely through our ticket system with full privacy.',
               )}
             </p>
           </div>
@@ -221,7 +228,7 @@ export function SupportView({
       {activeTab === 'ideas' && (
         <form
           onSubmit={submitSuggestion}
-          className="card-3d rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-4 max-w-2xl"
+          className="card-3d rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-4 max-w-2xl"
         >
           <h2 className="text-lg font-bold text-[#0e1d25] dark:text-white">
             {tr('مراسلة المشرفين والمدراء (مقترحات تطوير / دعم / استفسار)', 'Message Supervisors & Admins (Proposals / Support)')}
@@ -241,7 +248,7 @@ export function SupportView({
                 className={`min-h-[42px] px-2.5 py-2 rounded-xl text-xs font-bold transition-colors ${
                   sugType === t.id
                     ? 'bg-[#006a46] text-white'
-                    : 'bg-[#e8f6ff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                    : 'bg-[#e8f6ff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                 }`}
               >
                 {t.label}
@@ -254,7 +261,7 @@ export function SupportView({
             value={sugName}
             onChange={(e) => setSugName(e.target.value)}
             placeholder={tr('الاسم أو الكنية (اختياري)', 'Your name (optional)')}
-            className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+            className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
           />
 
           <textarea
@@ -266,7 +273,7 @@ export function SupportView({
               'اكتب مقترحك، أو مساهمتك، أو استفسارك ليصل مباشرة لقسم الرسائل لدى المدير...',
               'Write your suggestion, contribution, or help request directly to the Manager inbox...',
             )}
-            className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+            className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
           />
 
           <input
@@ -274,7 +281,7 @@ export function SupportView({
             value={sugContact}
             onChange={(e) => setSugContact(e.target.value)}
             placeholder={tr('البريد الإلكتروني أو المعرّف (اختياري)', 'Email or handle (optional)')}
-            className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+            className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
           />
 
           <input
@@ -282,7 +289,7 @@ export function SupportView({
             value={sugWhatsapp}
             onChange={(e) => setSugWhatsapp(e.target.value)}
             placeholder="رقم واتساب الزائر لإرسال تحديث حالة طلبك تلقائياً (سري واختياري)"
-            className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+            className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
           />
 
           <button
@@ -301,7 +308,7 @@ export function SupportView({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           <form
             onSubmit={submitVolunteer}
-            className="card-3d lg:col-span-7 rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-4"
+            className="card-3d lg:col-span-7 rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-4"
           >
             <h2 className="text-lg font-bold text-[#0e1d25] dark:text-white">
               {tr('استمارة طلب العمل أو التسجيل في الفريق التطوعي', 'Work Request & Volunteer Team Registration')}
@@ -312,7 +319,7 @@ export function SupportView({
               value={volName}
               onChange={(e) => setVolName(e.target.value)}
               placeholder={tr('الاسم أو الكنية (اختياري)', 'Your name (optional)')}
-              className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+              className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
             />
 
             <div className="space-y-1.5">
@@ -322,7 +329,7 @@ export function SupportView({
               <select
                 value={volField}
                 onChange={(e) => setVolField(e.target.value)}
-                className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none"
+                className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none"
               >
                 <option value="التدقيق اللغوي والشرعي وتخريج الأحاديث">
                   {tr('التدقيق اللغوي والشرعي وتخريج الأحاديث', 'Linguistic, Hadith Verification & Proofreading')}
@@ -359,7 +366,7 @@ export function SupportView({
                     className={`min-h-[44px] rounded-xl text-xs font-bold ${
                       volHours === h.id
                         ? 'bg-[#006a46] text-white'
-                        : 'bg-[#e8f6ff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                        : 'bg-[#e8f6ff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                     }`}
                   >
                     {h.label}
@@ -374,7 +381,7 @@ export function SupportView({
               value={volSkills}
               onChange={(e) => setVolSkills(e.target.value)}
               placeholder={tr('اذكر نبذة مختصرة عن خبرتك أو مهاراتك...', 'Briefly share your background or skills...')}
-              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+              className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
             />
 
             <input
@@ -386,7 +393,7 @@ export function SupportView({
                 'معرّف تيليجرام أو البريد للتواصل',
                 'Telegram handle or email for contact',
               )}
-              className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+              className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
             />
 
             <input
@@ -394,7 +401,7 @@ export function SupportView({
               value={volWhatsapp}
               onChange={(e) => setVolWhatsapp(e.target.value)}
               placeholder="رقم واتسابك لاستلام تحديثات طلبك فور مراجعته (اختياري وسري)"
-              className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+              className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
             />
 
             <button
@@ -408,7 +415,7 @@ export function SupportView({
             </button>
           </form>
 
-          <div className="card-3d lg:col-span-5 rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-4">
+          <div className="card-3d lg:col-span-5 rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-4">
             <h2 className="text-lg font-bold text-[#0e1d25] dark:text-white">
               {tr('طرق الدعم والمساهمة', 'Ways to Support')}
             </h2>
@@ -425,7 +432,7 @@ export function SupportView({
               </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] space-y-1">
+            <div className="p-4 rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] space-y-1">
               <h3 className="text-base font-bold text-[#0e1d25] dark:text-white">
                 {tr('٢. أخلص لنا بدعوة صالحة', '2. Keep Us in Your Sincere Prayers')}
               </h3>
@@ -441,7 +448,7 @@ export function SupportView({
       )}
 
       {activeTab === 'impact' && (
-        <section className="card-3d rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-5">
+        <section className="card-3d rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-5">
           <div>
             <h2 className="text-lg font-bold text-[#006a46] dark:text-[#6cdba6]">
               {tr('سجل الشفافية وإحصائيات المنصة', 'Transparency Ledger & Platform Impact')}
@@ -455,13 +462,13 @@ export function SupportView({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="card-3d bg-[#f4faff] dark:bg-[#112921] border border-slate-200/70 dark:border-white/10 p-4 rounded-2xl flex items-center gap-3">
+            <div className="card-3d bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10 p-4 rounded-2xl flex items-center gap-3">
               <div className="icon-3d w-11 h-11 rounded-xl bg-[#006a46]/10 text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center shrink-0">
                 <Eye className="w-5 h-5" />
               </div>
               <div>
                 <span className="text-xs text-[#6e7a71] dark:text-slate-400 block">
-                  {tr('إجمالي الزوار', 'Total Visitors')}
+                  {tr('إجمالي الزيارات التراكمي', 'Cumulative Total Visits')}
                 </span>
                 <span className="text-xl font-bold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
                   {formatNumber(visitorsCount)}
@@ -469,7 +476,7 @@ export function SupportView({
               </div>
             </div>
 
-            <div className="card-3d bg-[#eefaf3] dark:bg-[#0d241b] border border-[#008559]/30 dark:border-[#6cdba6]/20 p-4 rounded-2xl flex items-center gap-3">
+            <div className="card-3d bg-[#eefaf3] dark:bg-[#243e35] border border-[#008559]/30 dark:border-[#6cdba6]/20 p-4 rounded-2xl flex items-center gap-3">
               <div className="icon-3d w-11 h-11 rounded-xl bg-[#008559]/15 text-[#008559] dark:text-[#6cdba6] flex items-center justify-center shrink-0">
                 <Users className="w-5 h-5" />
               </div>
@@ -483,7 +490,7 @@ export function SupportView({
               </div>
             </div>
 
-            <div className="card-3d bg-[#f4faff] dark:bg-[#112921] border border-slate-200/70 dark:border-white/10 p-4 rounded-2xl flex items-center gap-3">
+            <div className="card-3d bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10 p-4 rounded-2xl flex items-center gap-3">
               <div className="icon-3d w-11 h-11 rounded-xl bg-[#006389]/10 text-[#006389] dark:text-[#80cfff] flex items-center justify-center shrink-0">
                 <MousePointerClick className="w-5 h-5" />
               </div>
@@ -497,16 +504,16 @@ export function SupportView({
               </div>
             </div>
 
-            <div className="card-3d bg-[#fffbf2] dark:bg-[#13221c] border border-[#f2be5e]/35 dark:border-white/10 p-4 rounded-2xl flex items-center gap-3">
-              <div className="icon-3d w-11 h-11 rounded-xl bg-[#ffdea8] text-[#7c5800] flex items-center justify-center shrink-0">
-                <Heart className="w-5 h-5" />
+            <div className="card-3d bg-[#eefaf3] dark:bg-[#1b3029] border border-[#006a46]/25 dark:border-white/10 p-4 rounded-2xl flex items-center gap-3">
+              <div className="icon-3d w-11 h-11 rounded-xl bg-[#006a46]/15 text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center shrink-0">
+                <Users className="w-5 h-5" />
               </div>
               <div>
                 <span className="text-xs text-[#6e7a71] dark:text-slate-400 block">
-                  {tr('تأمينات دعاء الوالدة', 'Ameens for Mother')}
+                  {tr('الأعضاء المسجلون', 'Registered Members')}
                 </span>
-                <span className="text-xl font-bold text-[#7c5800] dark:text-[#f2be5e] tabular-nums">
-                  {formatNumber(motherPrayersCount)}
+                <span className="text-xl font-bold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
+                  {formatNumber(registeredMembersCount)}
                 </span>
               </div>
             </div>
@@ -543,7 +550,7 @@ export function SupportView({
               return (
                 <div
                   key={stat.label}
-                  className="card-3d bg-[#e8f6ff] dark:bg-[#112921] p-4 rounded-2xl text-center flex flex-col items-center"
+                  className="card-3d bg-[#e8f6ff] dark:bg-[#28453b] p-4 rounded-2xl text-center flex flex-col items-center"
                 >
                   <Icon className={`w-6 h-6 mb-2 ${stat.color}`} />
                   <span className={`text-lg font-bold tabular-nums ${stat.color}`}>{stat.val}</span>
@@ -553,7 +560,7 @@ export function SupportView({
             })}
           </div>
 
-          <div className="p-4 rounded-xl bg-[#e0f0fb] dark:bg-[#112921] space-y-1.5">
+          <div className="p-4 rounded-xl bg-[#e0f0fb] dark:bg-[#28453b] space-y-1.5">
             <div className="flex items-center gap-2 font-bold text-sm text-[#0e1d25] dark:text-white">
               <ShieldCheck className="w-4 h-4 text-[#006a46] dark:text-[#6cdba6]" />
               <span>{tr('ميثاق النزاهة والتصميم العصري الميسّر', 'Integrity Charter & Modern Reading Design')}</span>
@@ -568,7 +575,7 @@ export function SupportView({
       )}
 
       {/* Always-Visible Ticket Tracking & Privacy Board */}
-      <section className="card-3d rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+      <section className="card-3d rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -576,7 +583,7 @@ export function SupportView({
               <span>سجل ومتابعة الطلبات والاقتراحات</span>
             </h2>
             <p className="text-xs text-[#6e7a71] dark:text-slate-400 mt-0.5">
-              استعلم برقم الطلب (#REQ-1001) لمتابعة حالة المراجعة والرد الإداري مع حفظ خصوصية البيانات
+              استعلم برقم الطلب (مثل 1001) لمتابعة حالة المراجعة والرد الإداري مع حفظ خصوصية البيانات
             </p>
           </div>
 
@@ -593,8 +600,8 @@ export function SupportView({
                 type="text"
                 value={ticketQuery}
                 onChange={(e) => setTicketQuery(e.target.value)}
-                placeholder="رقم التذكرة مثل REQ-1001"
-                className="w-full min-h-[40px] rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#081712] pr-9 pl-3 text-xs font-bold"
+                placeholder="رقم التذكرة مثل 1001"
+                className="w-full min-h-[40px] rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#1b3029] pr-9 pl-3 text-xs font-bold"
               />
             </div>
             <button
@@ -636,11 +643,11 @@ export function SupportView({
               return (
                 <div
                   key={t.id}
-                  className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] p-4 space-y-2"
+                  className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-4 space-y-2"
                 >
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <span dir="ltr" className="font-extrabold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
-                      {t.ticketNumber}
+                      {t.ticketNumber.replace(/^#?(?:REQ-?)?/i, '')}
                     </span>
                     <span className={`px-2.5 py-0.5 rounded-lg font-bold ${statusColor}`}>
                       {statusLabel}
@@ -649,7 +656,7 @@ export function SupportView({
                   <p className="text-xs font-bold text-[#7c5800] dark:text-[#f2be5e]">{t.categoryLabel}</p>
                   <p className="text-sm text-[#1e2d25] dark:text-slate-200 line-clamp-2">{t.text}</p>
                   {t.adminNote && (
-                    <p className="text-xs rounded-xl bg-white dark:bg-[#0c211a] border border-slate-200/70 dark:border-white/10 p-2.5 text-[#0e1d25] dark:text-slate-200">
+                    <p className="text-xs rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/70 dark:border-white/10 p-2.5 text-[#0e1d25] dark:text-slate-200">
                       <span className="font-bold text-[#006a46] dark:text-[#6cdba6]">رد الإدارة: </span>
                       {t.adminNote}
                     </p>

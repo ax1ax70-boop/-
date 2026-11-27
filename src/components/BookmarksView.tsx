@@ -93,7 +93,7 @@ export function BookmarksView({
       </section>
 
       {/* Single Unified Bookmarks Box */}
-      <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 space-y-5 shadow-xs">
+      <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 space-y-5 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-white/10 pb-3.5">
           <div className="flex items-center gap-2">
             <Bookmark className="w-5 h-5 text-[#7c5800] dark:text-[#f2be5e]" />
@@ -123,7 +123,7 @@ export function BookmarksView({
                 className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
                   filterKind === t.id
                     ? 'bg-[#006a46] text-white'
-                    : 'bg-[#e8f6ff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                    : 'bg-[#e8f6ff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                 }`}
               >
                 {t.label}
@@ -175,7 +175,7 @@ export function BookmarksView({
                 return (
                   <article
                     key={`ft_${item.id}`}
-                    className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] border border-[#006a46]/30 dark:border-[#6cdba6]/20 p-4 flex flex-col justify-between space-y-3"
+                    className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] border border-[#006a46]/30 dark:border-[#6cdba6]/20 p-4 flex flex-col justify-between space-y-3"
                   >
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -216,7 +216,7 @@ export function BookmarksView({
                         <button
                           type="button"
                           onClick={() => void copyFatwa(item)}
-                          className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white dark:bg-[#0d211a] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5"
+                          className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white dark:bg-[#223a32] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5"
                         >
                           <Copy className="w-3.5 h-3.5" />
                           <span>{tr('نسخ للنشر', 'Copy')}</span>
@@ -269,7 +269,7 @@ export function BookmarksView({
                 return (
                   <article
                     key={`ft_arch_${item.id}`}
-                    className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] border border-[#006389]/30 dark:border-[#80cfff]/20 p-4 flex flex-col justify-between space-y-3"
+                    className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] border border-[#006389]/30 dark:border-[#80cfff]/20 p-4 flex flex-col justify-between space-y-3"
                   >
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -312,7 +312,7 @@ export function BookmarksView({
                         <button
                           type="button"
                           onClick={() => void copyArchiveFatwa(item)}
-                          className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white dark:bg-[#0d211a] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5"
+                          className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white dark:bg-[#223a32] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5"
                         >
                           <Copy className="w-3.5 h-3.5" />
                           <span>{tr('نسخ للنشر', 'Copy')}</span>
@@ -372,7 +372,7 @@ export function BookmarksView({
                       <button
                         type="button"
                         onClick={() => onCopySada(post)}
-                        className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white dark:bg-[#0d211a] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5"
+                        className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white dark:bg-[#223a32] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5"
                       >
                         <Copy className="w-3.5 h-3.5" />
                         <span>{isEn ? 'Copy for Sada' : siteConfig.sadaBroadcastBtn}</span>

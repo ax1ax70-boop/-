@@ -2,13 +2,19 @@ import QRCode from 'qrcode';
 
 const qrCache = new Map<string, string>();
 
-export const DEFAULT_PUBLIC_SITE_URL = 'https://mwaiz.com';
+export const DEFAULT_PUBLIC_SITE_URL = 'https://ax1ax71.ai.studio/';
 
 export function resolvePublicSiteUrl(): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
-    const origin = window.location.origin;
-    if (!origin.includes('localhost') && !origin.includes('127.0.0.1')) {
-      return origin;
+    const host = window.location.hostname;
+    if (
+      host !== 'localhost' &&
+      host !== '127.0.0.1' &&
+      !host.startsWith('ais-dev-') &&
+      !host.startsWith('ais-pre-') &&
+      !host.endsWith('.run.app')
+    ) {
+      return window.location.origin;
     }
   }
   return DEFAULT_PUBLIC_SITE_URL;

@@ -233,6 +233,50 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "provider", "name", "createdAt"]
+    },
+    "SiteTelemetryCounters": {
+      "title": "SiteTelemetryCounters",
+      "description": "Monotonically ascending global counters for server visits, interactions, mother prayers, and registered members.",
+      "type": "object",
+      "properties": {
+        "visitorsCount": { "type": "number" },
+        "clicksCount": { "type": "number" },
+        "motherPrayersCount": { "type": "number" },
+        "registeredMembersCount": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["visitorsCount", "clicksCount", "motherPrayersCount", "registeredMembersCount", "updatedAt"]
+    },
+    "PublicMemberRecord": {
+      "title": "PublicMemberRecord",
+      "description": "Privacy-safe masked member summary (no email/phone/PII) persisted across devices and server restarts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "lastLoginAt": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "displayName", "createdAt"]
+    },
+    "QuizLeaderboardEntry": {
+      "title": "QuizLeaderboardEntry",
+      "description": "Public privacy-safe quiz leaderboard score entry per category.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nickname": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "category": { "type": "string", "enum": ["all", "aqeedah", "quran", "hadith_seerah", "fiqh", "akhlaq"] },
+        "score": { "type": "number" },
+        "correctCount": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "streakDays": { "type": "number" },
+        "dateKey": { "type": "string", "maxLength": 16 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "nickname", "category", "score", "correctCount", "totalQuestions", "createdAt"]
     }
   },
   "firestore": {
@@ -287,6 +331,18 @@
     "/site_settings/{docId}": {
       "schema": { "$ref": "#/entities/SiteSettingsDoc" },
       "description": "Shared cloud site configuration."
+    },
+    "/site_telemetry/{docId}": {
+      "schema": { "$ref": "#/entities/SiteTelemetryCounters" },
+      "description": "Shared monotonic visitor, interaction, and member counters."
+    },
+    "/public_members/{memberId}": {
+      "schema": { "$ref": "#/entities/PublicMemberRecord" },
+      "description": "Privacy-safe masked member labels without PII."
+    },
+    "/quiz_leaderboard/{entryId}": {
+      "schema": { "$ref": "#/entities/QuizLeaderboardEntry" },
+      "description": "Top-performing quiz participants and category scores."
     }
   }
 }

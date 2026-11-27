@@ -11,6 +11,8 @@ import {useI18n} from '../utils/i18n';
 import {getItemDownloadCount, useLiveStats} from '../utils/liveStats';
 import {generateQrDataUrl} from '../utils/qrCode';
 import {getPublicSiteUrl} from '../utils/storage';
+import {trackInteraction} from '../utils/telemetry';
+import {ClassicCardFooter} from './ClassicCardFooter';
 
 const LINE_COLORS: Array<'#111827' | '#1E3A8A' | '#991B1B' | '#065F46' | '#B45309'> = [
   '#1E3A8A',
@@ -20,15 +22,24 @@ const LINE_COLORS: Array<'#111827' | '#1E3A8A' | '#991B1B' | '#065F46' | '#B4530
   '#B45309',
 ];
 
+function shortenForClassicCard(raw: string, maxChars = 360): string {
+  const clean = raw.replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxChars) return clean;
+  const slice = clean.slice(0, maxChars);
+  const lastSpace = slice.lastIndexOf(' ');
+  return `${(lastSpace > 120 ? slice.slice(0, lastSpace) : slice).trim()}...`;
+}
+
 function splitIntoClassicLines(text: string): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= 4) return [words.join(' ')];
+  const shortened = shortenForClassicCard(text, 360);
+  const words = shortened.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 5) return [words.join(' ')];
   const lines: string[] = [];
-  const perLine = words.length <= 9 ? 3 : 4;
+  const perLine = words.length <= 12 ? 4 : words.length <= 28 ? 5 : 6;
   for (let i = 0; i < words.length; i += perLine) {
     lines.push(words.slice(i, i + perLine).join(' '));
   }
-  return lines.slice(0, 5);
+  return lines.slice(0, 10);
 }
 
 export function CardShareModal({
@@ -47,27 +58,57 @@ export function CardShareModal({
   const [busy, setBusy] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
+  const targetQrUrl = useMemo(() => {
+    if (!post) return getPublicSiteUrl('/?tab=home');
+    if (post.shareUrl) return post.shareUrl;
+    return post.id === 'daily_wisdom_featured'
+      ? getPublicSiteUrl('/?tab=home')
+      : getPublicSiteUrl(`/?post=${encodeURIComponent(post.id)}`);
+  }, [post]);
+
   useEffect(() => {
     if (!post) return;
     let active = true;
-    generateQrDataUrl(getPublicSiteUrl(), 96).then((url) => {
+    generateQrDataUrl(targetQrUrl, 220).then((url) => {
       if (active && url) setQrDataUrl(url);
     });
     return () => {
       active = false;
     };
+  }, [post, targetQrUrl]);
+
+  const rawMainQuote = useMemo(() => {
+    if (!post) return '';
+    const cleanBody = (post.body || '').replace(/\s+/g, ' ').trim();
+    const cleanExcerpt = (post.excerpt || '').replace(/\s+/g, ' ').trim();
+    if (cleanBody && cleanBody.length <= 360) return cleanBody;
+    if (cleanExcerpt.length >= 60) return cleanExcerpt;
+    return cleanBody || cleanExcerpt || post.title;
   }, [post]);
+
+  const shortCardQuote = useMemo(() => shortenForClassicCard(rawMainQuote, 360), [rawMainQuote]);
 
   const lines = useMemo(() => {
     if (!post) return [];
-    const mainQuote = post.title.length > 22 ? post.title : post.excerpt || post.title;
-    return splitIntoClassicLines(mainQuote);
-  }, [post]);
+    return splitIntoClassicLines(rawMainQuote);
+  }, [post, rawMainQuote]);
 
   if (!post) return null;
 
   const dlCount = getItemDownloadCount(stats, `post_${post.id}`, 14);
-  const fullPlainText = `${post.author}\n\n${post.title}\n${post.excerpt}\n\n[${post.sourceLabel || post.category}]\nموقع مواعظ وعبر — جميع الحقوق محفوظة © 2027`;
+  const bodyLen = (post.body || '').trim().length;
+  const isVeryLongPost = bodyLen > 380;
+
+  const continuationNote = isVeryLongPost
+    ? 'للمزيد وتكملة القراءة اضغط على الرابط بالأسفل أو امسح الباركود'
+    : undefined;
+
+  const shareTextSnippet = isVeryLongPost
+    ? shortenForClassicCard(post.body || post.excerpt || post.title, 420)
+    : (post.body || post.excerpt || post.title).replace(/\s+/g, ' ').trim();
+
+  const fullPlainText = `${post.author}\n\n${shareTextSnippet}\n\n🌐 ${targetQrUrl}\n\n[${post.sourceLabel || post.category}]\nمَواعِظ وَعِبَر`;
+
   const waHref = `https://wa.me/?text=${encodeURIComponent(fullPlainText)}`;
   const xHref = `https://x.com/intent/tweet?text=${encodeURIComponent(fullPlainText)}`;
 
@@ -76,6 +117,8 @@ export function CardShareModal({
     lines: lines.map((ln, idx) => ({text: ln, color: LINE_COLORS[idx % LINE_COLORS.length]})),
     source: post.sourceLabel || post.category,
     qrDataUrl,
+    qrUrl: targetQrUrl,
+    continuationNote,
   };
 
   const handleDownload = async () => {
@@ -85,6 +128,7 @@ export function CardShareModal({
       const blob = await renderCardPngBlob(cardRef.current, fallbackCardData);
       triggerBlobDownload(blob, `mawaedh-${post.id}.png`);
       recordDownload(`post_${post.id}`);
+      trackInteraction('sermon_share', 'card_download');
       onNotify(tr('تم حفظ البطاقة الدعوية بصيغة PNG بنجاح', 'Wisdom card saved as PNG'));
     } catch {
       onNotify(tr('تم تجهيز نص البطاقة — يمكنك نسخه ومشاركته مباشرة', 'Card text ready to share'));
@@ -101,10 +145,13 @@ export function CardShareModal({
         element: cardRef.current,
         fallbackData: fallbackCardData,
         fileName: `mawaedh-${post.id}.png`,
-        title: post.title,
+        title: post.title || shortCardQuote,
         plainText: fullPlainText,
-        shareUrl: getPublicSiteUrl(`/?post=${encodeURIComponent(post.id)}`),
-        onSuccess: () => recordDownload(`post_${post.id}`),
+        shareUrl: targetQrUrl,
+        onSuccess: () => {
+          recordDownload(`post_${post.id}`);
+          trackInteraction('sermon_share', 'card_share');
+        },
         onNotify,
       });
     } finally {
@@ -115,7 +162,8 @@ export function CardShareModal({
   const handleCopyText = async () => {
     const ok = await copyTextSafely(fullPlainText);
     if (ok) {
-      onNotify(tr('تم نسخ نص البطاقة للمشاركة', 'Card text copied for sharing'));
+      trackInteraction('sermon_share', 'card_copy');
+      onNotify(tr('تم نسخ نص البطاقة والرابط للمشاركة', 'Card text & link copied'));
     } else {
       onNotify(tr('نص البطاقة جاهز للمشاركة', 'Card text ready'));
     }
@@ -127,7 +175,7 @@ export function CardShareModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-3xl bg-white dark:bg-[#0c211a] text-[#0e1d25] dark:text-[#e3f3fe] p-5 shadow-2xl space-y-4 max-h-[calc(100dvh-96px)] overflow-y-auto"
+        className="w-full max-w-md rounded-3xl bg-white dark:bg-[#223a32] text-[#0e1d25] dark:text-[#e3f3fe] p-5 shadow-2xl space-y-4 max-h-[calc(100dvh-96px)] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -142,7 +190,7 @@ export function CardShareModal({
           </button>
         </div>
 
-        {/* Classic Clean White Square Card */}
+        {/* Classic Clean White Card (Logo + Single Barcode, Dynamic Height) */}
         <div
           ref={cardRef}
           data-dawah-card="true"
@@ -153,9 +201,9 @@ export function CardShareModal({
             color: '#111827',
             fontFamily: '"Cairo", "Tajawal", "Amiri", sans-serif',
           }}
-          className="aspect-square w-full rounded-2xl p-6 flex flex-col justify-between text-center"
+          className="min-h-[340px] w-full rounded-2xl p-6 flex flex-col justify-between gap-4 text-center"
         >
-          <p style={{color: '#111827'}} className="text-base sm:text-lg font-extrabold">
+          <p style={{color: '#111827'}} className="text-base sm:text-lg font-extrabold leading-snug">
             {post.author}
           </p>
 
@@ -164,35 +212,41 @@ export function CardShareModal({
               <p
                 key={`${post.id}_ln_${idx}`}
                 style={{color: LINE_COLORS[idx % LINE_COLORS.length]}}
-                className="text-xl sm:text-2xl font-extrabold leading-[1.38]"
+                className={`${
+                  lines.length > 4 ? 'text-base sm:text-lg leading-[1.55]' : 'text-xl sm:text-2xl leading-[1.38]'
+                } font-extrabold`}
               >
                 {ln}
               </p>
             ))}
           </div>
 
-          <div
-            style={{borderTop: '1px solid #E2E8F0'}}
-            className="flex items-end justify-between gap-2 pt-2"
-          >
-            <span style={{color: '#111827'}} className="text-xs font-bold text-right">
-              {post.sourceLabel || post.category}
-            </span>
-            <div className="flex items-center gap-2 shrink-0">
-              <span style={{color: '#4B5563'}} className="text-[10px] font-semibold text-left leading-tight">
-                موقع مواعظ وعبر — جميع الحقوق محفوظة © 2027
-              </span>
-              {qrDataUrl && (
-                <img
-                  src={qrDataUrl}
-                  alt="رمز موقع مواعظ وعبر"
-                  style={{backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0'}}
-                  className="w-9 h-9 rounded-md p-0.5 shrink-0"
-                />
-              )}
-            </div>
+          <div className="space-y-1.5">
+            {continuationNote && (
+              <p
+                style={{color: '#006a46'}}
+                className="text-[10.5px] font-bold text-center leading-tight"
+              >
+                {continuationNote}
+              </p>
+            )}
+            <ClassicCardFooter
+              sourceLabel={post.sourceLabel || post.category}
+              qrUrl={targetQrUrl}
+              compact
+            />
           </div>
         </div>
+
+        <a
+          href={targetQrUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          dir="ltr"
+          className="block rounded-xl bg-[#f4faff] dark:bg-[#192d26] border border-slate-200/80 dark:border-white/10 px-3 py-2 text-[11px] font-mono text-[#006a46] dark:text-[#6cdba6] hover:underline break-all text-center"
+        >
+          {targetQrUrl}
+        </a>
 
         <button
           type="button"
@@ -201,7 +255,7 @@ export function CardShareModal({
           className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-[#7c5800] hover:bg-[#614400] disabled:opacity-60 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition-colors"
         >
           <Share2 className="w-4 h-4" />
-          <span>{busy ? 'جاري تجهيز البطاقة...' : 'مشاركة البطاقة (صورة ونص)'}</span>
+          <span>{busy ? 'جاري تجهيز البطاقة...' : 'مشاركة البطاقة + الباركود'}</span>
         </button>
 
         <div className="grid grid-cols-2 gap-2.5">
@@ -220,7 +274,7 @@ export function CardShareModal({
             className="min-h-[42px] px-3 py-2 rounded-xl bg-[#f3f6f4] dark:bg-white/10 text-[#0e1d25] dark:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
           >
             <Copy className="w-4 h-4" />
-            <span>نسخ النص</span>
+            <span>نسخ النص + الرابط</span>
           </button>
           <a
             href={waHref}

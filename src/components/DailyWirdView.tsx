@@ -93,7 +93,7 @@ export function DailyWirdView({
       </div>
 
       {/* Goal Selector */}
-      <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-5 sm:p-6 space-y-4">
+      <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#223a32] p-5 sm:p-6 space-y-4">
         <h2 className="text-base sm:text-lg font-bold text-[#0e1d25] dark:text-white">
           اختر مقدار الورد اليومي المناسب لك
         </h2>
@@ -131,7 +131,7 @@ export function DailyWirdView({
               onChange={(e) =>
                 updateWird({currentPage: Math.min(604, Math.max(1, Number(e.target.value) || 1))})
               }
-              className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#081712] px-3.5 py-2.5 text-sm font-bold tabular-nums"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#1b3029] px-3.5 py-2.5 text-sm font-bold tabular-nums"
             />
           </label>
 
@@ -147,14 +147,14 @@ export function DailyWirdView({
               onChange={(e) =>
                 updateWird({targetPages: Math.min(60, Math.max(1, Number(e.target.value) || 1))})
               }
-              className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#081712] px-3.5 py-2.5 text-sm font-bold tabular-nums"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-white dark:bg-[#1b3029] px-3.5 py-2.5 text-sm font-bold tabular-nums"
             />
           </label>
         </div>
       </div>
 
       {/* Light Faith Checklist */}
-      <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-5 sm:p-6 space-y-3">
+      <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#223a32] p-5 sm:p-6 space-y-3">
         <h2 className="text-base sm:text-lg font-bold text-[#0e1d25] dark:text-white flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
           <span>سجل المحافظة على الطاعات اليومية</span>

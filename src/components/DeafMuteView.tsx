@@ -436,7 +436,7 @@ export function DeafMuteView({
 
             <p className="text-sm sm:text-base font-bold text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center gap-2">
               <Sparkles className="w-4 h-4 shrink-0" />
-              <span>بإدارة المهندس يونس عبد الكريم</span>
+              <span>بإشراف إدارة قسم الصم والبكم</span>
             </p>
 
             <p className="text-sm sm:text-base text-[#222f28] dark:text-slate-200 font-medium leading-[1.85]">
@@ -481,7 +481,7 @@ export function DeafMuteView({
       </section>
 
       {/* Peer-to-Peer Deaf & Mute Community Live Room (Gated Link + Real-time Connected Count + Supervisor Approval) */}
-      <section className="rounded-3xl bg-white dark:bg-[#0c211a] border-2 border-[#006a46]/30 dark:border-[#6cdba6]/25 p-5 sm:p-6 shadow-sm space-y-4">
+      <section className="rounded-3xl bg-white dark:bg-[#223a32] border-2 border-[#006a46]/30 dark:border-[#6cdba6]/25 p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-white/10 pb-3.5">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -500,7 +500,7 @@ export function DeafMuteView({
               <Users className="w-4 h-4 shrink-0" />
               <span>المتصلون الآن: {roomState.onlineCount.toLocaleString('ar-EG')}</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-200 text-xs font-bold tabular-nums">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-200 text-xs font-bold tabular-nums">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#006a46] dark:text-[#6cdba6]" />
               <span>المعتمدون: {roomState.approvedCount.toLocaleString('ar-EG')}</span>
             </span>
@@ -539,7 +539,7 @@ export function DeafMuteView({
             </div>
           )
         ) : (
-          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-3.5 flex items-center gap-2.5 text-xs text-[#6e7a71] dark:text-slate-400">
+          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-3.5 flex items-center gap-2.5 text-xs text-[#6e7a71] dark:text-slate-400">
             <Clock className="w-4 h-4 shrink-0 text-[#006a46] dark:text-[#6cdba6]" />
             <span>
               رابط المحادثة المرئية مخفي حالياً؛ سيظهر هنا فور إرساله من مسؤول قسم الصم والبكم. يمكنك طلب الانضمام أو المشاهدة للمحادثة النصية المباشرة بين الإخوة الآن.
@@ -549,7 +549,7 @@ export function DeafMuteView({
 
         {/* Approval Flow UI */}
         {!isApprovedRoomMember ? (
-          <div className="rounded-2xl bg-[#f8fbf9] dark:bg-[#081712] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 space-y-4">
+          <div className="rounded-2xl bg-[#f8fbf9] dark:bg-[#1b3029] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 space-y-4">
             {isPendingApproval ? (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-start gap-3">
@@ -589,7 +589,7 @@ export function DeafMuteView({
                       value={visitorName}
                       onChange={(e) => setVisitorName(e.target.value)}
                       placeholder="اكتب اسمك أو كنيتك..."
-                      className="w-full min-h-[42px] px-3.5 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/15 text-sm font-bold"
+                      className="w-full min-h-[42px] px-3.5 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/15 text-sm font-bold"
                     />
                   </label>
 
@@ -640,7 +640,7 @@ export function DeafMuteView({
 
             <div
               ref={roomScrollRef}
-              className="h-64 overflow-y-auto rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-4 space-y-2.5"
+              className="h-64 overflow-y-auto rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-4 space-y-2.5"
             >
               {roomState.messages.length === 0 ? (
                 <p className="text-xs sm:text-sm text-[#6e7a71] dark:text-slate-400 text-center py-10">
@@ -658,7 +658,7 @@ export function DeafMuteView({
                             ? 'bg-[#006a46] text-white'
                             : isSupervisor
                               ? 'bg-[#fffbf2] dark:bg-[#1a2013] border border-amber-500/40 text-[#0e1d25] dark:text-[#ffdea8]'
-                              : 'bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-[#0e1d25] dark:text-white'
+                              : 'bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-[#0e1d25] dark:text-white'
                         }`}
                       >
                         <span className="text-[10px] font-extrabold opacity-80 block">
@@ -703,7 +703,7 @@ export function DeafMuteView({
                     value={peerInput}
                     onChange={(e) => setPeerInput(e.target.value)}
                     placeholder="اكتب رسالتك للمتصلين في غرفة الصم والبكم..."
-                    className="flex-1 min-h-[44px] px-4 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-sm focus:outline-none focus:border-[#006a46]"
+                    className="flex-1 min-h-[44px] px-4 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-sm focus:outline-none focus:border-[#006a46]"
                   />
                   <button
                     type="submit"
@@ -722,7 +722,7 @@ export function DeafMuteView({
 
       {/* Live 1-to-1 Text Chat with Section Supervisor */}
       {chatOpen && (
-        <section className="rounded-3xl bg-white dark:bg-[#0c211a] border border-[#006a46]/30 p-5 sm:p-6 shadow-sm space-y-4">
+        <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-[#006a46]/30 p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 dark:border-white/10 pb-3">
             <div>
               <h2 className="text-base sm:text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -738,13 +738,13 @@ export function DeafMuteView({
               value={visitorName}
               onChange={(e) => setVisitorName(e.target.value)}
               placeholder="الاسم للتعريف (اختياري)"
-              className="min-h-[38px] px-3 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-xs font-bold"
+              className="min-h-[38px] px-3 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-xs font-bold"
             />
           </div>
 
           <div
             ref={chatScrollRef}
-            className="h-56 overflow-y-auto rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-4 space-y-2.5"
+            className="h-56 overflow-y-auto rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-4 space-y-2.5"
           >
             {chatMessages.length === 0 ? (
               <p className="text-xs sm:text-sm text-[#6e7a71] dark:text-slate-400 text-center py-8">
@@ -759,7 +759,7 @@ export function DeafMuteView({
                       className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm space-y-1 ${
                         isVisitor
                           ? 'bg-[#006a46] text-white'
-                          : 'bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-[#0e1d25] dark:text-white'
+                          : 'bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-[#0e1d25] dark:text-white'
                       }`}
                     >
                       <span className="text-[10px] font-extrabold opacity-80 block">{msg.senderName}</span>
@@ -788,7 +788,7 @@ export function DeafMuteView({
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               placeholder={wsConnected ? 'اكتب رسالتك الخاصة للمسؤول...' : 'جاري الاتصال...'}
-              className="flex-1 min-h-[44px] px-4 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-sm focus:outline-none focus:border-[#006a46]"
+              className="flex-1 min-h-[44px] px-4 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-sm focus:outline-none focus:border-[#006a46]"
             />
             <button
               type="submit"
@@ -817,7 +817,7 @@ export function DeafMuteView({
           {DEAF_MUTE_VISUAL_CARDS.map((card) => (
             <article
               key={card.id}
-              className="rounded-3xl bg-white dark:bg-[#0c211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-3.5"
+              className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-3.5"
             >
               <span className="inline-block px-3 py-1 rounded-xl bg-[#eefaf3] dark:bg-[#133126] text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold">
                 {card.badge}
@@ -874,7 +874,7 @@ export function DeafMuteView({
                 className={`min-h-[36px] px-3 py-1 rounded-xl text-xs font-bold transition-colors ${
                   statusFilter === f.id
                     ? 'bg-[#006a46] text-white'
-                    : 'bg-white dark:bg-[#0c211a] border border-slate-200 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
+                    : 'bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
                 }`}
               >
                 {f.label}
@@ -887,7 +887,7 @@ export function DeafMuteView({
           <ComingSoonState
             badgeText="قريباً بإذن الله"
             title="لا توجد فيديوهات منشورة في هذا التصنيف حالياً"
-            description="يقوم المهندس يونس عبد الكريم والإدارة برفع الحلقات المرئية بلغة الإشارة تباعاً من قناة يوتيوب ليتمكن الإخوة والأخوات من مشاهدتها مباشرة داخل هذا القسم."
+            description="يقوم فريق إدارة قسم الصم والبكم برفع الحلقات المرئية بلغة الإشارة تباعاً من قناة يوتيوب ليتمكن الإخوة والأخوات من مشاهدتها مباشرة داخل هذا القسم."
             isAdmin={isAdmin}
             onAdminQuickAdd={onAdminQuickAdd}
             adminAddLabel="+ إضافة رابط فيديو يوتيوب بلغة الإشارة"
@@ -900,7 +900,7 @@ export function DeafMuteView({
               return (
                 <article
                   key={vid.id}
-                  className="rounded-2xl bg-white dark:bg-[#0c211a] border border-slate-200/80 dark:border-white/10 overflow-hidden flex flex-col justify-between shadow-xs"
+                  className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 overflow-hidden flex flex-col justify-between shadow-xs"
                 >
                   <div>
                     {isPlaying && ytId ? (
@@ -960,7 +960,7 @@ export function DeafMuteView({
                         {vid.description}
                       </p>
                       {vid.benefitText && (
-                        <p className="text-xs text-[#006a46] dark:text-[#6cdba6] bg-[#eefaf3] dark:bg-[#0f261e] rounded-xl p-2.5 leading-relaxed">
+                        <p className="text-xs text-[#006a46] dark:text-[#6cdba6] bg-[#eefaf3] dark:bg-[#28453b] rounded-xl p-2.5 leading-relaxed">
                           {vid.benefitText}
                         </p>
                       )}
@@ -969,7 +969,7 @@ export function DeafMuteView({
 
                   <div className="px-4 pb-4 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <span className="text-[#6e7a71] dark:text-slate-400 font-semibold truncate">
-                      بإدارة: {vid.managerName || 'المهندس يونس عبد الكريم'}
+                      بإشراف: {vid.managerName && !/يونس|عبد\s*الكريم/.test(vid.managerName) ? vid.managerName : 'إدارة قسم الصم والبكم'}
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
@@ -1019,7 +1019,7 @@ export function DeafMuteView({
           <form
             onSubmit={handleSaveEditedVideo}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg rounded-3xl bg-white dark:bg-[#0c211a] border border-slate-200 dark:border-white/15 p-5 sm:p-6 shadow-2xl space-y-3.5"
+            className="w-full max-w-lg rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/15 p-5 sm:p-6 shadow-2xl space-y-3.5"
           >
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/10 pb-3">
               <h3 className="text-base font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -1040,7 +1040,7 @@ export function DeafMuteView({
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               placeholder="عنوان الفيديو"
-              className="w-full min-h-[42px] px-3.5 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-sm font-bold"
+              className="w-full min-h-[42px] px-3.5 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-sm font-bold"
             />
             <input
               type="url"
@@ -1048,7 +1048,7 @@ export function DeafMuteView({
               value={editYoutube}
               onChange={(e) => setEditYoutube(e.target.value)}
               placeholder="رابط يوتيوب (https://www.youtube.com/watch?v=...)"
-              className="w-full min-h-[42px] px-3.5 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-sm"
+              className="w-full min-h-[42px] px-3.5 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-sm"
             />
             <div className="grid grid-cols-2 gap-2.5">
               <input
@@ -1056,12 +1056,12 @@ export function DeafMuteView({
                 value={editCategory}
                 onChange={(e) => setEditCategory(e.target.value)}
                 placeholder="التصنيف"
-                className="w-full min-h-[40px] px-3 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-xs font-bold"
+                className="w-full min-h-[40px] px-3 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-xs font-bold"
               />
               <select
                 value={editStatus}
                 onChange={(e) => setEditStatus(e.target.value as 'published' | 'upcoming')}
-                className="w-full min-h-[40px] px-3 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-xs font-bold"
+                className="w-full min-h-[40px] px-3 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-xs font-bold"
               >
                 <option value="published">متاح للمشاهدة الآن</option>
                 <option value="upcoming">قريباً بإذن الله</option>
@@ -1072,14 +1072,14 @@ export function DeafMuteView({
               value={editDesc}
               onChange={(e) => setEditDesc(e.target.value)}
               placeholder="وصف الفيديو..."
-              className="w-full p-3 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-sm"
+              className="w-full p-3 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-sm"
             />
             <textarea
               rows={2}
               value={editBenefit}
               onChange={(e) => setEditBenefit(e.target.value)}
               placeholder="فائدة مكتوبة أو تلخيص مرئي مرفق (اختياري)..."
-              className="w-full p-3 rounded-xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-xs"
+              className="w-full p-3 rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-xs"
             />
             <div className="flex justify-end gap-2 pt-1">
               <button

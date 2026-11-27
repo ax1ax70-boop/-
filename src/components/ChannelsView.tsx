@@ -57,7 +57,7 @@ export function ChannelsView({
       </section>
 
       {/* WhatsApp Group Rules & Direct Join */}
-      <section className="rounded-2xl bg-[#fffbf2] dark:bg-[#14221c] border border-[#f2be5e]/45 dark:border-[#f2be5e]/20 p-5 sm:p-6 card-3d space-y-4">
+      <section className="rounded-2xl bg-[#fffbf2] dark:bg-[#243d34] border border-[#f2be5e]/45 dark:border-[#f2be5e]/20 p-5 sm:p-6 card-3d space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-[#006a46] text-white flex items-center justify-center shrink-0 icon-3d">
@@ -81,7 +81,7 @@ export function ChannelsView({
           {WHATSAPP_GROUP_RULES.map((rule, idx) => (
             <li
               key={idx}
-              className="rounded-xl bg-white dark:bg-[#0c1b15] border border-slate-200/70 dark:border-white/10 p-3.5 text-xs sm:text-sm text-[#3e4a42] dark:text-slate-200 leading-relaxed flex items-start gap-2.5"
+              className="rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/70 dark:border-white/10 p-3.5 text-xs sm:text-sm text-[#3e4a42] dark:text-slate-200 leading-relaxed flex items-start gap-2.5"
             >
               <span className="w-6 h-6 rounded-full bg-[#ffdad6] dark:bg-rose-950/60 text-[#93000a] dark:text-rose-300 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 tabular-nums">
                 {formatNumber(idx + 1)}
@@ -123,7 +123,7 @@ export function ChannelsView({
       </section>
 
       {activeLinks.length === 0 ? (
-        <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 p-10 text-center space-y-3">
+        <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 p-10 text-center space-y-3">
           <p className="text-base font-bold text-[#0e1d25] dark:text-white">
             {tr('لا توجد قنوات مفعّلة حالياً', 'No active channels configured')}
           </p>
@@ -145,7 +145,7 @@ export function ChannelsView({
             return (
               <article
                 key={ch.id}
-                className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 card-3d flex flex-col justify-between space-y-4"
+                className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 card-3d flex flex-col justify-between space-y-4"
               >
                 <div className="flex items-start gap-3.5">
                   <div

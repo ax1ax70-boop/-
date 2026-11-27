@@ -1,9 +1,11 @@
 import {
   Award,
   BarChart3,
+  Bell,
   BellRing,
   Calendar,
   CheckCircle2,
+  Clock,
   Copy,
   Heart,
   RefreshCw,
@@ -19,21 +21,28 @@ import {
 import {useEffect, useMemo, useState} from 'react';
 import {
   ADHKAR_8_CHAPTERS,
-  ADHKAR_ITEMS,
   FREE_TASBEEH_PHRASES,
-  HISN_ITEMS,
   MOTHER_PRAYERS,
 } from '../data/seed';
 import type {CustomAdhkarItem, Post, SiteConfig} from '../types';
+import {
+  type AdhkarChapterId,
+  type NormalizedDhikrCard,
+  buildAdhkarCatalog,
+} from '../utils/adhkarCatalog';
 import {ComingSoonState} from './ComingSoonState';
-type AdhkarChapterId = (typeof ADHKAR_8_CHAPTERS)[number]['id'];
+import {CustomAdhkarAlertsManager} from './CustomAdhkarAlertsManager';
 import {
   ADHKAR_STATS_UPDATED_EVENT,
   getAdhkarProgressCards,
   recordDhikrTap,
 } from '../utils/adhkarStats';
 import {useI18n} from '../utils/i18n';
-import type {AdhkarReminderSettings} from '../utils/notifications';
+import {
+  type AdhkarReminderSettings,
+  isNotificationSupported,
+  requestNotificationPermission,
+} from '../utils/notifications';
 import {resolveFontFamilyCss, resolveFontSizeSpec, useReadingPrefs} from '../utils/readingPrefs';
 import {getPublicSiteUrl} from '../utils/storage';
 import {trackInteraction} from '../utils/telemetry';
@@ -46,16 +55,6 @@ interface AdhkarState {
   freeTasbeeh: number;
   freePhraseIdx: number;
   soundEnabled: boolean;
-}
-
-interface NormalizedDhikrCard {
-  id: string;
-  chapterId: AdhkarChapterId;
-  title?: string;
-  text: string;
-  fadl?: string;
-  targetCount: number;
-  source: string;
 }
 
 function getTodayKey(): string {
@@ -94,68 +93,14 @@ function loadAdhkarState(): AdhkarState {
   }
 }
 
-function mapLegacyTo8Chapters(): NormalizedDhikrCard[] {
-  const list: NormalizedDhikrCard[] = [];
-
-  for (const item of ADHKAR_ITEMS) {
-    let chapterId: AdhkarChapterId = 'ch1_morning_evening';
-    if (item.category === 'morning' || item.category === 'evening') {
-      chapterId = 'ch1_morning_evening';
-    } else if (item.category === 'after_prayer') {
-      chapterId = 'ch2_wudu_prayer';
-    } else if (item.category === 'sleep') {
-      chapterId = 'ch3_sleep_waking';
-    } else if (item.category === 'general') {
-      chapterId = 'ch7_istighfar_tasbeeh';
-    } else if (item.category === 'prophetic_duas' || item.category === 'quran_duas') {
-      chapterId = 'ch6_distress_ruqyah';
-    } else if (item.category === 'family_muslims_duas') {
-      chapterId = 'ch8_birr_wafaa';
-    }
-    list.push({
-      id: `adh_${item.id}`,
-      chapterId,
-      title: item.category === 'morning' ? 'من أذكار الصباح' : item.category === 'evening' ? 'من أذكار المساء' : undefined,
-      text: item.text,
-      fadl: item.fadl,
-      targetCount: item.targetCount,
-      source: item.source,
-    });
-  }
-
-  for (const h of HISN_ITEMS) {
-    let chapterId: AdhkarChapterId = 'ch6_distress_ruqyah';
-    if (h.chapter === 'mosque_prayer') chapterId = 'ch2_wudu_prayer';
-    else if (h.chapter === 'waking_sleep') chapterId = 'ch3_sleep_waking';
-    else if (h.chapter === 'travel_nature') chapterId = 'ch4_home_travel';
-    else if (h.chapter === 'home_clothing') chapterId = 'ch5_food_clothing';
-    else if (h.chapter === 'distress_debt' || h.chapter === 'ruqyah_illness') {
-      chapterId = 'ch6_distress_ruqyah';
-    }
-
-    list.push({
-      id: `his_${h.id}`,
-      chapterId,
-      title: h.title,
-      text: h.text,
-      fadl: h.fadl,
-      targetCount: h.targetCount,
-      source: h.source,
-    });
-  }
-
-  return list;
-}
-
 export function AdhkarView({
   siteConfig,
   initialSection = 'adhkar',
+  highlightedDhikrId,
   customAdhkar = [],
   motherPrayerText,
-  motherPrayersCount = 0,
-  hasSaidAmen = false,
-  onSayAmen,
   reminderSettings,
+  onChangeReminderSettings,
   onOpenSettings,
   onOpenWeeklyActivity,
   onShareCard,
@@ -163,12 +108,14 @@ export function AdhkarView({
 }: {
   siteConfig?: SiteConfig;
   initialSection?: 'adhkar' | 'hisn';
+  highlightedDhikrId?: string | null;
   customAdhkar?: CustomAdhkarItem[];
   motherPrayerText?: string;
   motherPrayersCount?: number;
   hasSaidAmen?: boolean;
   onSayAmen?: () => void;
   reminderSettings?: AdhkarReminderSettings;
+  onChangeReminderSettings?: (next: AdhkarReminderSettings) => void;
   onOpenSettings?: () => void;
   onOpenWeeklyActivity?: () => void;
   onShareCard?: (post: Post) => void;
@@ -186,31 +133,39 @@ export function AdhkarView({
   const [query, setQuery] = useState('');
   const [statsVersion, setStatsVersion] = useState(0);
   const [motherPrayerIdx, setMotherPrayerIdx] = useState(0);
+  const [showCustomAlertsDrawer, setShowCustomAlertsDrawer] = useState(false);
+  const [inlineScheduleCardId, setInlineScheduleCardId] = useState<string | null>(null);
+  const [inlineScheduleTime, setInlineScheduleTime] = useState('09:00');
+  const [focusedDhikrId, setFocusedDhikrId] = useState<string | null>(highlightedDhikrId || null);
 
-  const allItems = useMemo(() => {
-    const base = mapLegacyTo8Chapters();
-    const extra: NormalizedDhikrCard[] = (Array.isArray(customAdhkar) ? customAdhkar : []).map((c) => {
-      const validCh = ADHKAR_8_CHAPTERS.some((ch) => ch.id === c.chapterId)
-        ? (c.chapterId as AdhkarChapterId)
-        : 'ch1_morning_evening';
-      return {
-        id: c.id,
-        chapterId: validCh,
-        title: c.title,
-        text: c.text,
-        fadl: c.fadl,
-        targetCount: Math.max(1, c.targetCount || 1),
-        source: c.source || 'إضافات المشرفين السحابية',
-      };
-    });
-    return [...extra, ...base];
-  }, [customAdhkar]);
+  const allItems = useMemo(() => buildAdhkarCatalog(customAdhkar), [customAdhkar]);
+
+  useEffect(() => {
+    setFocusedDhikrId(highlightedDhikrId || null);
+  }, [highlightedDhikrId]);
 
   useEffect(() => {
     if (initialSection === 'hisn') {
       setActiveChapter('ch2_wudu_prayer');
     }
   }, [initialSection]);
+
+  useEffect(() => {
+    if (!highlightedDhikrId) return;
+    if (highlightedDhikrId.startsWith('mother_dua_')) {
+      setActiveChapter('ch8_birr_wafaa');
+      return;
+    }
+    const found = allItems.find((it) => it.id === highlightedDhikrId);
+    if (found) {
+      setActiveChapter(found.chapterId);
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`dhikr-card-${found.id}`);
+        el?.scrollIntoView({behavior: 'smooth', block: 'center'});
+      }, 180);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedDhikrId, allItems]);
 
   useEffect(() => {
     try {
@@ -364,15 +319,19 @@ export function AdhkarView({
 
   const shareMotherPrayer = async () => {
     const appLabel = siteConfig?.appName || 'مواعظ وعبر';
-    const siteUrl = getPublicSiteUrl('/?tab=adhkar');
-    const msg = `🤲 *دعاء للوالدة حفظها الله*\n\n${currentMotherPrayer}\n\n— الأذكار والأدعية الجامعة · ${appLabel}\n🌐 ${siteUrl}`;
+    const siteUrl = getPublicSiteUrl(`/?tab=adhkar&dhikr=mother_dua_${motherPrayerIdx}`);
+    const clean = currentMotherPrayer.replace(/\s+/g, ' ').trim();
+    const shortDua = clean.length > 110 ? `${clean.slice(0, 106).trim()}...` : clean;
+    const msg = `🤲 *دعاء للوالدة حفظها الله*\n\n${shortDua}\n\n📲 لتكملة الدعاء عبر الباركود أو الرابط:\n${siteUrl}\n— ${appLabel}`;
     try {
       await navigator.clipboard.writeText(msg);
-      onNotify(tr('جزاك الله خيراً، تم نسخ دعاء الوالدة مع رابط الموقع للمشاركة', 'Mother prayer copied'));
+      trackInteraction('sermon_share', 'adhkar', 'adhkar');
+      onNotify(tr('تم نسخ مختصر الدعاء مع رابط الموقع للمشاركة', 'Mother prayer snippet copied'));
     } catch {
       if (navigator.share) {
         try {
           await navigator.share({title: appLabel, text: msg, url: siteUrl});
+          trackInteraction('sermon_share', 'adhkar', 'adhkar');
         } catch {
           // ignore
         }
@@ -396,6 +355,7 @@ export function AdhkarView({
       commentsCount: 0,
       publishedAtLabel: categoryLabel,
       createdAt: new Date().toISOString(),
+      shareUrl: getPublicSiteUrl(`/?tab=adhkar&dhikr=${encodeURIComponent(id)}`),
     });
   };
 
@@ -434,6 +394,26 @@ export function AdhkarView({
               >
                 <BarChart3 className="w-4 h-4 text-[#ffdea8]" />
                 <span>{tr('النشاط الأسبوعي', 'Weekly Activity')}</span>
+              </button>
+            )}
+            {onChangeReminderSettings && reminderSettings && (
+              <button
+                type="button"
+                aria-expanded={showCustomAlertsDrawer}
+                onClick={() => setShowCustomAlertsDrawer((prev) => !prev)}
+                className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors ${
+                  showCustomAlertsDrawer || (reminderSettings.customAlerts || []).some((a) => a.enabled)
+                    ? 'bg-[#ffdea8] text-[#271900]'
+                    : 'bg-white/15 hover:bg-white/25 text-white'
+                }`}
+              >
+                <Bell className="w-4 h-4 shrink-0" />
+                <span>
+                  {tr(
+                    `تنبيهات مخصصة (${formatNumber((reminderSettings.customAlerts || []).filter((a) => a.enabled).length)})`,
+                    `Custom Alerts (${(reminderSettings.customAlerts || []).filter((a) => a.enabled).length})`,
+                  )}
+                </span>
               </button>
             )}
             {onOpenSettings && (
@@ -485,8 +465,36 @@ export function AdhkarView({
         </div>
       </section>
 
+      {/* Inline Custom Per-Dhikr Local Browser Alerts Settings Drawer */}
+      {showCustomAlertsDrawer && reminderSettings && onChangeReminderSettings && (
+        <section className="rounded-2xl bg-[#f4faff] dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 space-y-3">
+          <CustomAdhkarAlertsManager
+            appName={siteConfig?.appName || 'مواعظ وعبر'}
+            customAdhkar={customAdhkar}
+            reminderSettings={reminderSettings}
+            onChangeReminderSettings={onChangeReminderSettings}
+            onOpenAdhkar={(dhikrId) => {
+              if (!dhikrId) return;
+              const found = allItems.find((it) => it.id === dhikrId);
+              if (found) {
+                setQuery('');
+                setActiveChapter(found.chapterId);
+                setFocusedDhikrId(found.id);
+                window.setTimeout(() => {
+                  document.getElementById(`dhikr-card-${found.id}`)?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                  });
+                }, 120);
+              }
+            }}
+            onNotify={onNotify}
+          />
+        </section>
+      )}
+
       {/* Interactive Hasanat Counter & 3 Permanent Progress Cards (Today | This Month | Overall) */}
-      <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-xs space-y-3.5">
+      <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-xs space-y-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Award className="w-5 h-5 text-[#7c5800] dark:text-[#f2be5e]" />
@@ -567,7 +575,7 @@ export function AdhkarView({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={tr('ابحث فوريّاً في جميع الأبواب الثمانية والأدعية الجامعة...', 'Instant search across all 8 chapters...')}
-          className="w-full min-h-[46px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+          className="w-full min-h-[46px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
         />
       </div>
 
@@ -585,7 +593,7 @@ export function AdhkarView({
                 className={`min-h-[48px] px-3.5 py-2.5 rounded-xl text-start transition-all flex items-center justify-between gap-2 border ${
                   isActive
                     ? 'bg-[#006a46] text-white border-[#006a46] shadow-sm'
-                    : 'bg-white dark:bg-[#0d211a] border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-200 hover:border-[#006a46]/50'
+                    : 'bg-white dark:bg-[#223a32] border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-200 hover:border-[#006a46]/50'
                 }`}
               >
                 <span className="text-xs sm:text-[13px] font-bold truncate">{ch.label}</span>
@@ -608,7 +616,7 @@ export function AdhkarView({
       {(trimmedQuery || activeChapter === 'ch8_birr_wafaa') && (
         <section className="space-y-4">
           {/* Moved Mother Dua Card (Dedicated strictly to Mother) */}
-          <div className="rounded-3xl bg-[#fffbf2] dark:bg-[#13201b] border border-[#f2be5e]/45 dark:border-[#f2be5e]/25 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="rounded-3xl bg-[#fffbf2] dark:bg-[#243b32] border border-[#f2be5e]/45 dark:border-[#f2be5e]/25 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs font-extrabold text-[#7c5800] dark:text-[#f2be5e]">
                 <Heart className="w-4 h-4 fill-current shrink-0" />
@@ -632,7 +640,7 @@ export function AdhkarView({
             <button
               type="button"
               onClick={() => setMotherPrayerIdx((p) => (p + 1) % motherPrayersList.length)}
-              className="w-full text-start rounded-2xl bg-white/90 dark:bg-[#0c1814] border border-[#f2be5e]/35 p-4 hover:border-[#006a46]/50 transition-colors"
+              className="w-full text-start rounded-2xl bg-white/90 dark:bg-[#1f352d] border border-[#f2be5e]/35 p-4 hover:border-[#006a46]/50 transition-colors"
             >
               <p
                 dir="rtl"
@@ -643,32 +651,35 @@ export function AdhkarView({
               </p>
             </button>
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {onSayAmen && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {onShareCard && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      exportItemCard(
+                        'دعاء للوالدة حفظها الله',
+                        currentMotherPrayer,
+                        'وقفة بر ووفاء',
+                        'الأذكار والأدعية الجامعة',
+                        `mother_dua_${motherPrayerIdx}`,
+                      )
+                    }
+                    className="min-h-[42px] px-3.5 py-2 rounded-xl bg-[#7c5800] hover:bg-[#614400] text-white text-xs sm:text-sm font-bold flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>بطاقة + باركود</span>
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={onSayAmen}
-                  disabled={hasSaidAmen}
-                  className={`min-h-[42px] px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-colors ${
-                    hasSaidAmen
-                      ? 'bg-[#006a46] text-white cursor-default'
-                      : 'bg-[#006a46]/10 hover:bg-[#006a46] text-[#006a46] hover:text-white dark:bg-[#008559]/25 dark:text-[#6cdba6]'
-                  }`}
+                  onClick={() => void shareMotherPrayer()}
+                  className="min-h-[42px] px-4 py-2 rounded-xl bg-[#ffdea8] hover:bg-[#ffc968] text-[#271900] text-xs sm:text-sm font-bold flex items-center gap-1.5"
                 >
-                  <Heart className={`w-4 h-4 ${hasSaidAmen ? 'fill-current' : ''}`} />
-                  <span>{hasSaidAmen ? 'تم التأمين — تقبل الله' : siteConfig?.motherAmenBtn || 'آمين — حفظها الله'}</span>
-                  <span className="tabular-nums">({formatNumber(motherPrayersCount)})</span>
+                  <Share2 className="w-4 h-4" />
+                  <span>{siteConfig?.motherShareBtn || 'مشاركة الدعاء للوالدة'}</span>
                 </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => void shareMotherPrayer()}
-                className="min-h-[42px] px-4 py-2 rounded-xl bg-[#ffdea8] hover:bg-[#ffc968] text-[#271900] text-xs sm:text-sm font-bold flex items-center gap-1.5"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>{siteConfig?.motherShareBtn || 'مشاركة الدعاء للوالدة'}</span>
-              </button>
+              </div>
             </div>
           </div>
 
@@ -704,7 +715,7 @@ export function AdhkarView({
                 aria-label={tr('اختر صيغة التسبيح', 'Select Tasbeeh phrase')}
                 value={state.freePhraseIdx}
                 onChange={(e) => setState((s) => ({...s, freePhraseIdx: Number(e.target.value)}))}
-                className="min-h-[40px] rounded-xl bg-white dark:bg-[#0a1914] border border-[#f2be5e]/40 px-3 py-1.5 text-xs font-bold text-[#0e1d25] dark:text-white focus:outline-none"
+                className="min-h-[40px] rounded-xl bg-white dark:bg-[#1d332b] border border-[#f2be5e]/40 px-3 py-1.5 text-xs font-bold text-[#0e1d25] dark:text-white focus:outline-none"
               >
                 {FREE_TASBEEH_PHRASES.map((phrase, idx) => (
                   <option key={phrase} value={idx}>
@@ -716,7 +727,7 @@ export function AdhkarView({
                 type="button"
                 onClick={() => setState((s) => ({...s, freeTasbeeh: 0}))}
                 aria-label={tr('تصفير المسبحة الحرة', 'Reset Tasbeeh')}
-                className="min-w-[40px] min-h-[40px] rounded-xl bg-white dark:bg-[#0a1914] border border-slate-200 dark:border-white/10 text-[#6e7a71] dark:text-slate-300 flex items-center justify-center hover:text-[#ba1a1a]"
+                className="min-w-[40px] min-h-[40px] rounded-xl bg-white dark:bg-[#1d332b] border border-slate-200 dark:border-white/10 text-[#6e7a71] dark:text-slate-300 flex items-center justify-center hover:text-[#ba1a1a]"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
@@ -777,13 +788,22 @@ export function AdhkarView({
             const isDone = count >= item.targetCount;
             const pct = Math.min(100, Math.round((count / item.targetCount) * 100));
 
+            const isFocused = focusedDhikrId === item.id || highlightedDhikrId === item.id;
+            const scheduledRule = (reminderSettings?.customAlerts || []).find(
+              (r) => r.dhikrId === item.id && r.enabled,
+            );
+            const isSchedulingInline = inlineScheduleCardId === item.id;
+
             return (
               <article
+                id={`dhikr-card-${item.id}`}
                 key={item.id}
                 className={`rounded-2xl border p-5 card-3d space-y-4 transition-colors ${
-                  isDone
-                    ? 'bg-[#eefaf3] dark:bg-[#0c271c] border-[#006a46]/40 dark:border-[#6cdba6]/30'
-                    : 'bg-white dark:bg-[#0d211a] border-slate-200/80 dark:border-white/10'
+                  isFocused
+                    ? 'border-[#006a46] ring-2 ring-[#006a46]/30 bg-[#eefaf3] dark:bg-[#233d34]'
+                    : isDone
+                      ? 'bg-[#eefaf3] dark:bg-[#233d34] border-[#006a46]/40 dark:border-[#6cdba6]/30'
+                      : 'bg-white dark:bg-[#223a32] border-slate-200/80 dark:border-white/10'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2 text-xs text-[#6e7a71] dark:text-slate-400">
@@ -797,7 +817,30 @@ export function AdhkarView({
                       </h3>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    {onChangeReminderSettings && reminderSettings && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isSchedulingInline) {
+                            setInlineScheduleCardId(null);
+                          } else {
+                            setInlineScheduleTime(scheduledRule?.time || '09:00');
+                            setInlineScheduleCardId(item.id);
+                          }
+                        }}
+                        aria-label={tr('جدولة تنبيه لهذا الذكر', 'Schedule alert for this Dhikr')}
+                        title={tr('جدولة تنبيه لهذا الذكر', 'Schedule alert for this Dhikr')}
+                        className={`min-h-[38px] px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1 transition-colors tabular-nums ${
+                          scheduledRule
+                            ? 'bg-[#ffdea8] text-[#271900]'
+                            : 'bg-[#f4faff] dark:bg-white/10 text-[#006389] dark:text-[#80cfff] hover:bg-[#e1f1fb]'
+                        }`}
+                      >
+                        <Bell className="w-3.5 h-3.5 shrink-0" />
+                        <span>{scheduledRule ? scheduledRule.time : tr('تنبيه', 'Alert')}</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void copyDhikr(item)}
@@ -818,10 +861,11 @@ export function AdhkarView({
                             item.id,
                           )
                         }
-                        aria-label={tr('تصدير بطاقة', 'Export PNG Card')}
-                        className="min-w-[38px] min-h-[38px] rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/10 text-[#7c5800] dark:text-[#f2be5e] transition-colors"
+                        aria-label={tr('مشاركة كبطاقة وباركود', 'Share as Card + QR')}
+                        className="min-h-[36px] px-2.5 py-1 rounded-xl bg-[#fffbf2] dark:bg-white/10 hover:bg-[#ffdea8]/60 text-[#7c5800] dark:text-[#f2be5e] text-[11px] font-extrabold flex items-center gap-1 transition-colors"
                       >
-                        <Sparkles className="w-4 h-4" />
+                        <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                        <span>{tr('بطاقة + QR', 'Card + QR')}</span>
                       </button>
                     )}
                     <button
@@ -837,6 +881,86 @@ export function AdhkarView({
                     </button>
                   </div>
                 </div>
+
+                {isSchedulingInline && onChangeReminderSettings && reminderSettings && (
+                  <div className="rounded-xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/80 dark:border-white/10 p-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#0e1d25] dark:text-white">
+                      <Clock className="w-4 h-4 text-[#006a46] dark:text-[#6cdba6] shrink-0" />
+                      <span>{tr('تحديد وقت التنبيه المحلي لهذا الذكر:', 'Schedule local alert time:')}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="time"
+                        value={inlineScheduleTime}
+                        onChange={(e) => setInlineScheduleTime(e.target.value || '09:00')}
+                        dir="ltr"
+                        className="min-h-[38px] px-2.5 rounded-lg bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/15 text-xs font-bold text-[#0e1d25] dark:text-white tabular-nums"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (isNotificationSupported() && window.Notification.permission === 'default') {
+                            await requestNotificationPermission();
+                          }
+                          const cleanTime = /^\d{2}:\d{2}$/.test(inlineScheduleTime) ? inlineScheduleTime : '09:00';
+                          const existing = reminderSettings.customAlerts || [];
+                          const idxFound = existing.findIndex((r) => r.dhikrId === item.id);
+                          const ruleObj = {
+                            id:
+                              idxFound >= 0
+                                ? existing[idxFound].id
+                                : `dhikr_alert_${Date.now().toString(36)}`,
+                            dhikrId: item.id,
+                            dhikrTitle: item.title || activeChapterMeta.label,
+                            dhikrText: item.text,
+                            dhikrSource: item.source,
+                            time: cleanTime,
+                            enabled: true,
+                            lastNotifiedDate: '',
+                          };
+                          const nextAlerts =
+                            idxFound >= 0
+                              ? existing.map((r, i) => (i === idxFound ? ruleObj : r))
+                              : [ruleObj, ...existing];
+                          onChangeReminderSettings({
+                            ...reminderSettings,
+                            enabled: true,
+                            customAlerts: nextAlerts,
+                          });
+                          setInlineScheduleCardId(null);
+                          onNotify(
+                            tr(
+                              `تمت جدولة تنبيه محلي لهذا الذكر الساعة ${cleanTime}`,
+                              `Local alert scheduled for ${cleanTime}`,
+                            ),
+                          );
+                        }}
+                        className="min-h-[38px] px-3.5 rounded-lg bg-[#006a46] hover:bg-[#00583a] text-white text-xs font-bold whitespace-nowrap"
+                      >
+                        {tr('حفظ الموعد', 'Save Time')}
+                      </button>
+                      {scheduledRule && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextAlerts = (reminderSettings.customAlerts || []).filter(
+                              (r) => r.dhikrId !== item.id,
+                            );
+                            onChangeReminderSettings({
+                              ...reminderSettings,
+                              customAlerts: nextAlerts,
+                            });
+                            setInlineScheduleCardId(null);
+                            onNotify(tr('تم إلغاء التنبيه المخصص لهذا الذكر', 'Custom alert removed'));
+                          }}
+                          className="min-h-[38px] px-3 rounded-lg border border-slate-200 dark:border-white/15 text-xs font-bold text-[#ba1a1a]"
+                        >
+                          {tr('إلغاء', 'Remove')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <p
                   dir="rtl"

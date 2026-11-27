@@ -317,10 +317,15 @@ export function FatawaView({
 
   const copyFatwa = async (item: FatwaItem) => {
     const fatawaUrl = getPublicSiteUrl('/?tab=fatawa');
-    const formatted = `⚖️ *فتوى شرعية · ${item.scholarName}*\n\n❓ *السؤال:* ${item.question}\n\n✅ *الجواب:* ${item.answer}\n\n📚 المصدر: ${item.source}\n🌐 رابط الموقع: ${fatawaUrl}\n— ${siteConfig.appName}`;
+    const cleanAns = item.answer.replace(/\s+/g, ' ').trim();
+    const shortAns = cleanAns.length > 130 ? `${cleanAns.slice(0, 126).trim()}...` : cleanAns;
+    const formatted =
+      cleanAns.length > 130
+        ? `⚖️ *${item.scholarName}*\n\n❓ ${item.question}\n✅ ${shortAns}\n\n📲 لتكملة الحديث والفتوى عبر الباركود أو الرابط:\n${fatawaUrl}\n— ${siteConfig.appName}`
+        : `⚖️ *فتوى شرعية · ${item.scholarName}*\n\n❓ *السؤال:* ${item.question}\n\n✅ *الجواب:* ${item.answer}\n\n📚 المصدر: ${item.source}\n🌐 رابط الموقع: ${fatawaUrl}\n— ${siteConfig.appName}`;
     try {
       await navigator.clipboard.writeText(formatted);
-      onNotify(tr('تم نسخ الفتوى مع رابط الموقع وجاهزة للنشر', 'Fatwa & site link copied cleanly for sharing'));
+      onNotify(tr('تم نسخ الفتوى المختصرة مع رابط الموقع للمشاركة', 'Fatwa snippet & link copied'));
     } catch {
       onNotify(tr('تم تجهيز الفتوى للمشاركة', 'Fatwa ready to share'));
     }
@@ -334,13 +339,14 @@ export function FatawaView({
       body: item.answer,
       author: item.scholarName,
       sourceLabel: item.source,
-      category: item.category,
+      category: 'فتوى موثقة',
       mediaType: 'quote',
       cardTheme: item.scholarId === 'hajouri' ? 'emerald' : 'gold',
       likes: 0,
       commentsCount: 0,
       publishedAtLabel: item.category,
       createdAt: item.createdAt,
+      shareUrl: getPublicSiteUrl('/?tab=fatawa'),
     });
   };
 
@@ -556,7 +562,7 @@ export function FatawaView({
                     className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors ${
                       selectedCategory === cat
                         ? 'bg-[#006389] text-white'
-                        : 'bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
+                        : 'bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
                     }`}
                   >
                     {isEn ? CAT_EN_MAP[cat] || cat : cat}
@@ -571,7 +577,7 @@ export function FatawaView({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={tr('ابحث في الأسئلة والفتاوى...', 'Search questions & answers...')}
-                  className="w-full min-h-[42px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+                  className="w-full min-h-[42px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
                 />
               </div>
             </div>
@@ -605,8 +611,8 @@ export function FatawaView({
                       isBookmarked
                         ? 'bg-[#fffdf7] dark:bg-[#11251d] border-[#f2be5e] dark:border-[#f2be5e]/60'
                         : isHajouri
-                          ? 'bg-white dark:bg-[#0d211a] border-[#006a46]/45 dark:border-[#6cdba6]/35'
-                          : 'bg-white dark:bg-[#0d211a] border-slate-200/80 dark:border-white/10'
+                          ? 'bg-white dark:bg-[#223a32] border-[#006a46]/45 dark:border-[#6cdba6]/35'
+                          : 'bg-white dark:bg-[#223a32] border-slate-200/80 dark:border-white/10'
                     }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -676,7 +682,7 @@ export function FatawaView({
 
                     <div className="space-y-3">
                       {/* Question tonal container without left/right thick border stripe */}
-                      <div className="p-4 rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/70 dark:border-white/10">
+                      <div className="p-4 rounded-xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10">
                         <span className="text-xs font-bold text-[#006a46] dark:text-[#6cdba6] block mb-1">
                           {tr('السؤال:', 'Question:')}
                         </span>
@@ -741,7 +747,7 @@ export function FatawaView({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={tr('ابحث في المفضلة...', 'Search favorites...')}
-                  className="w-full min-h-[40px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+                  className="w-full min-h-[40px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
                 />
               </div>
 
@@ -759,7 +765,7 @@ export function FatawaView({
           </div>
 
           {favoriteFatawa.length === 0 && favoriteArchiveFatawa.length === 0 ? (
-            <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-10 text-center space-y-4">
+            <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-10 text-center space-y-4">
               <div className="w-14 h-14 rounded-2xl bg-[#fffbf2] dark:bg-[#171d18] text-[#7c5800] dark:text-[#f2be5e] flex items-center justify-center mx-auto icon-3d">
                 <Star className="w-7 h-7" />
               </div>
@@ -801,8 +807,8 @@ export function FatawaView({
                     key={item.id}
                     className={`rounded-2xl border p-5 sm:p-6 card-3d space-y-4 ${
                       isHajouri
-                        ? 'bg-white dark:bg-[#0d211a] border-[#006a46]/45 dark:border-[#6cdba6]/35'
-                        : 'bg-white dark:bg-[#0d211a] border-slate-200/80 dark:border-white/10'
+                        ? 'bg-white dark:bg-[#223a32] border-[#006a46]/45 dark:border-[#6cdba6]/35'
+                        : 'bg-white dark:bg-[#223a32] border-slate-200/80 dark:border-white/10'
                     }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -853,7 +859,7 @@ export function FatawaView({
                     </div>
 
                     <div className="space-y-3">
-                      <div className="p-4 rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/70 dark:border-white/10">
+                      <div className="p-4 rounded-xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10">
                         <span className="text-xs font-bold text-[#006a46] dark:text-[#6cdba6] block mb-1">
                           {tr('السؤال:', 'Question:')}
                         </span>
@@ -883,7 +889,7 @@ export function FatawaView({
               {favoriteArchiveFatawa.map((item) => (
                 <article
                   key={`arch_fav_${item.id}`}
-                  className="rounded-2xl border border-[#f2be5e] dark:border-[#f2be5e]/50 bg-[#fffdf7] dark:bg-[#0d211a] p-5 sm:p-6 card-3d space-y-3"
+                  className="rounded-2xl border border-[#f2be5e] dark:border-[#f2be5e]/50 bg-[#fffdf7] dark:bg-[#223a32] p-5 sm:p-6 card-3d space-y-3"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-xs font-bold">
@@ -972,7 +978,7 @@ export function FatawaView({
                   className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
                     archiveSiteFilter === tab.id
                       ? 'bg-[#006a46] text-white'
-                      : 'bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
+                      : 'bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
                   }`}
                 >
                   {tab.label}
@@ -997,13 +1003,13 @@ export function FatawaView({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={tr('ابحث في الأرشيف المباشر...', 'Search live archive...')}
-                className="w-full min-h-[42px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+                className="w-full min-h-[42px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
               />
             </div>
           </div>
 
           {archiveLoading && archiveItems.length === 0 ? (
-            <div className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-10 text-center space-y-2">
+            <div className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-10 text-center space-y-2">
               <RefreshCw className="w-7 h-7 text-[#006a46] dark:text-[#6cdba6] animate-spin mx-auto" />
               <p className="text-sm font-bold text-[#0e1d25] dark:text-white">
                 {tr('جاري جلب فهرس الفتاوى المباشر من sh-yahia.net و alilmia.com...', 'Fetching live Fatawa index...')}
@@ -1040,7 +1046,7 @@ export function FatawaView({
                     className={`rounded-2xl border p-5 card-3d flex flex-col justify-between gap-3 ${
                       isArchiveSaved
                         ? 'bg-[#fffdf7] dark:bg-[#11251d] border-[#f2be5e] dark:border-[#f2be5e]/50'
-                        : 'bg-white dark:bg-[#0d211a] border-slate-200/80 dark:border-white/10'
+                        : 'bg-white dark:bg-[#223a32] border-slate-200/80 dark:border-white/10'
                     }`}
                   >
                     <div className="space-y-1.5">
@@ -1119,7 +1125,7 @@ export function FatawaView({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl rounded-3xl bg-white dark:bg-[#0c211a] p-5 sm:p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto"
+            className="w-full max-w-2xl rounded-3xl bg-white dark:bg-[#223a32] p-5 sm:p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto"
           >
             <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-white/10 pb-3">
               <div className="min-w-0 space-y-1">
@@ -1149,7 +1155,7 @@ export function FatawaView({
               </div>
             ) : (
               <div className="space-y-3">
-                <div dir="rtl" className="rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-4 text-sm sm:text-base text-[#0e1d25] dark:text-slate-200 leading-loose whitespace-pre-line">
+                <div dir="rtl" className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-4 text-sm sm:text-base text-[#0e1d25] dark:text-slate-200 leading-loose whitespace-pre-line">
                   {remoteFatwa.answer}
                 </div>
               </div>
@@ -1214,7 +1220,7 @@ export function FatawaView({
                     onShareCard({
                       id: `remote_${Date.now()}`,
                       title: remoteFatwa.question,
-                      excerpt: remoteFatwa.answer.slice(0, 260),
+                      excerpt: remoteFatwa.answer.slice(0, 140),
                       body: remoteFatwa.answer,
                       author: remoteFatwa.siteName,
                       sourceLabel: remoteFatwa.siteName,
@@ -1225,6 +1231,7 @@ export function FatawaView({
                       commentsCount: 0,
                       publishedAtLabel: 'الآن',
                       createdAt: new Date().toISOString(),
+                      shareUrl: getPublicSiteUrl('/?tab=fatawa'),
                     })
                   }
                   className="min-h-[42px] px-3.5 py-2 rounded-xl bg-[#fffbf2] dark:bg-white/10 text-[#7c5800] dark:text-[#f2be5e] text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"

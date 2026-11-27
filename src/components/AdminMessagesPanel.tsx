@@ -137,7 +137,7 @@ export function AdminMessagesPanel({
       return {
         kind: 'suggestion',
         id: s.id,
-        ticketNumber: s.ticketNumber || `#REQ-${s.id.slice(-4).toUpperCase()}`,
+        ticketNumber: (s.ticketNumber || s.id.replace(/\D/g, '').slice(-4) || '1001').replace(/^#?(?:REQ-?)?/i, ''),
         category: meta.category,
         categoryLabel: meta.label,
         senderName: s.senderName,
@@ -155,7 +155,7 @@ export function AdminMessagesPanel({
     const volEntries: UnifiedInboxEntry[] = volunteers.map((v) => ({
       kind: 'volunteer',
       id: v.id,
-      ticketNumber: v.ticketNumber || `#REQ-${v.id.slice(-4).toUpperCase()}`,
+      ticketNumber: (v.ticketNumber || v.id.replace(/\D/g, '').slice(-4) || '1001').replace(/^#?(?:REQ-?)?/i, ''),
       category: 'team',
       categoryLabel: 'طلب عمل / انضمام للفريق التطوعي',
       senderName: v.senderName,
@@ -367,7 +367,7 @@ export function AdminMessagesPanel({
   return (
     <div className="space-y-5">
       {/* Header Banner */}
-      <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-4">
+      <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-[#006a46] text-white flex items-center justify-center shrink-0">
@@ -398,7 +398,7 @@ export function AdminMessagesPanel({
             type="button"
             disabled={refreshing}
             onClick={() => void refreshMessages(false)}
-            className="min-h-[42px] px-4 py-2 rounded-xl bg-[#e8f6ff] hover:bg-[#d5ecfb] dark:bg-[#112921] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-colors"
+            className="min-h-[42px] px-4 py-2 rounded-xl bg-[#e8f6ff] hover:bg-[#d5ecfb] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             <span>{refreshing ? 'جاري التحديث...' : 'تحديث الصندوق'}</span>
@@ -425,7 +425,7 @@ export function AdminMessagesPanel({
                 className={`p-3 rounded-xl border text-start transition-all ${
                   active
                     ? 'bg-[#006a46] text-white border-[#006a46] shadow-xs'
-                    : 'bg-[#f4faff] dark:bg-[#112921] border-slate-200/70 dark:border-white/10 text-[#0e1d25] dark:text-white hover:border-[#006a46]/50'
+                    : 'bg-[#f4faff] dark:bg-[#28453b] border-slate-200/70 dark:border-white/10 text-[#0e1d25] dark:text-white hover:border-[#006a46]/50'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -457,7 +457,7 @@ export function AdminMessagesPanel({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="ابحث بالاسم، نص الرسالة، المهارات، أو وسيلة التواصل..."
-              className="w-full min-h-[42px] ps-10 pe-4 rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+              className="w-full min-h-[42px] ps-10 pe-4 rounded-xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/80 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
             />
           </div>
 
@@ -477,7 +477,7 @@ export function AdminMessagesPanel({
                 className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
                   statusFilter === st.id
                     ? 'bg-[#7c5800] text-white'
-                    : 'bg-[#f4faff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                    : 'bg-[#f4faff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                 }`}
               >
                 {st.label}
@@ -489,7 +489,7 @@ export function AdminMessagesPanel({
 
       {/* Entries List */}
       {filteredEntries.length === 0 ? (
-        <section className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-10 text-center space-y-2">
+        <section className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-10 text-center space-y-2">
           <Inbox className="w-8 h-8 text-[#006a46] dark:text-[#6cdba6] mx-auto opacity-75" />
           <p className="text-sm font-bold text-[#0e1d25] dark:text-white">
             لا توجد رسائل مطابقة في هذا التصنيف حالياً
@@ -506,7 +506,7 @@ export function AdminMessagesPanel({
               entry.status === 'resolved'
                 ? 'bg-[#eefaf3] text-[#006a46] dark:bg-[#133126] dark:text-[#6cdba6]'
                 : entry.status === 'reviewed'
-                  ? 'bg-[#e8f6ff] text-[#006389] dark:bg-[#0e2a38] dark:text-[#80cfff]'
+                  ? 'bg-[#e8f6ff] text-[#006389] dark:bg-[#203f4d] dark:text-[#80cfff]'
                   : 'bg-[#ffdea8] text-[#271900]';
             const statusLabel =
               entry.status === 'resolved' ? 'تمت المعالجة' : entry.status === 'reviewed' ? 'قيد المراجعة' : 'جديد';
@@ -521,7 +521,7 @@ export function AdminMessagesPanel({
             return (
               <article
                 key={`${entry.kind}_${entry.id}`}
-                className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-xs space-y-3"
+                className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-xs space-y-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -585,7 +585,7 @@ export function AdminMessagesPanel({
                 </p>
 
                 {/* Admin Response / Note visible in Visitor Ticket Tracker */}
-                <div className="rounded-xl bg-[#f4faff] dark:bg-[#112921] p-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="rounded-xl bg-[#f4faff] dark:bg-[#28453b] p-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
                     type="text"
                     value={noteDrafts[`${entry.kind}:${entry.id}`] ?? entry.adminNote ?? ''}
@@ -593,7 +593,7 @@ export function AdminMessagesPanel({
                       setNoteDrafts((prev) => ({...prev, [`${entry.kind}:${entry.id}`]: e.target.value}))
                     }
                     placeholder="اكتب رداً أو ملاحظة للزائر (تظهر في سجل متابعة الطلبات)..."
-                    className="flex-1 min-h-[38px] rounded-lg bg-white dark:bg-[#0b1f18] border border-slate-200 dark:border-white/10 px-3 text-xs focus:outline-none focus:border-[#006a46]"
+                    className="flex-1 min-h-[38px] rounded-lg bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 px-3 text-xs focus:outline-none focus:border-[#006a46]"
                   />
                   <button
                     type="button"
@@ -643,7 +643,7 @@ export function AdminMessagesPanel({
                         <select
                           value={issueRole}
                           onChange={(e) => setIssueRole(e.target.value as AdminRole)}
-                          className="min-h-[38px] rounded-lg bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-2.5 text-xs font-bold"
+                          className="min-h-[38px] rounded-lg bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-2.5 text-xs font-bold"
                         >
                           <option value="editor">محرر محتوى (Editor)</option>
                           <option value="supervisor">مشرف قسم (Supervisor)</option>
@@ -652,7 +652,7 @@ export function AdminMessagesPanel({
                         <select
                           value={issueSection}
                           onChange={(e) => setIssueSection(e.target.value as AdminSectionScope)}
-                          className="min-h-[38px] rounded-lg bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-2.5 text-xs font-bold"
+                          className="min-h-[38px] rounded-lg bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-2.5 text-xs font-bold"
                         >
                           <option value="all">جميع الأقسام المسموحة</option>
                           <option value="mother-oasis">واحة الداعية أمي</option>
@@ -667,7 +667,7 @@ export function AdminMessagesPanel({
                           value={issueUsername}
                           onChange={(e) => setIssueUsername(e.target.value)}
                           placeholder="اسم مستخدم (أو يولَّد تلقائياً)"
-                          className="min-h-[38px] rounded-lg bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-2.5 text-xs"
+                          className="min-h-[38px] rounded-lg bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-2.5 text-xs"
                         />
                         <div className="flex gap-1.5">
                           <input
@@ -675,7 +675,7 @@ export function AdminMessagesPanel({
                             value={issuePassword}
                             onChange={(e) => setIssuePassword(e.target.value)}
                             placeholder="كلمة مرور مؤقتة (اختياري)"
-                            className="flex-1 min-h-[38px] rounded-lg bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 px-2.5 text-xs"
+                            className="flex-1 min-h-[38px] rounded-lg bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 px-2.5 text-xs"
                           />
                           <button
                             type="button"
@@ -693,7 +693,7 @@ export function AdminMessagesPanel({
                       const cred = issuedCredentials[`${entry.kind}:${entry.id}`];
                       const shareCredText = `تم قبولكم في فريق مواعظ وعبر:\nاسم المستخدم: ${cred.username}\nكلمة المرور المؤقتة: ${cred.tempPassword}\nالدور: ${cred.role} · القسم: ${cred.assignedSection}`;
                       return (
-                        <div className="rounded-lg bg-white dark:bg-[#081712] border border-emerald-600/30 p-2.5 text-xs flex flex-wrap items-center justify-between gap-2">
+                        <div className="rounded-lg bg-white dark:bg-[#1b3029] border border-emerald-600/30 p-2.5 text-xs flex flex-wrap items-center justify-between gap-2">
                           <div className="space-y-0.5">
                             <span className="font-extrabold text-[#006a46] dark:text-[#6cdba6] block">
                               بيانات الدخول الصادرة للمقبول:
@@ -729,7 +729,7 @@ export function AdminMessagesPanel({
                       <button
                         type="button"
                         onClick={() => void copyContact(entry.contact!)}
-                        className="px-2 py-1 rounded-lg bg-[#e8f6ff] dark:bg-[#112921] text-[#006a46] dark:text-[#6cdba6] font-bold flex items-center gap-1 hover:brightness-95"
+                        className="px-2 py-1 rounded-lg bg-[#e8f6ff] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] font-bold flex items-center gap-1 hover:brightness-95"
                       >
                         <Copy className="w-3 h-3" />
                         <span>نسخ</span>

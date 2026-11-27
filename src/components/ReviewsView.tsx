@@ -130,7 +130,7 @@ export function ReviewsView({
 
   return (
     <div className="space-y-6 pb-8">
-      <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#223a32] p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-[#0e1d25] dark:text-white">
@@ -162,7 +162,7 @@ export function ReviewsView({
           {starBreakdown.map((row) => (
             <div
               key={row.stars}
-              className="rounded-xl bg-[#f8faf9] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 px-3 py-2 space-y-1.5"
+              className="rounded-xl bg-[#f8faf9] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 px-3 py-2 space-y-1.5"
             >
               <div className="flex items-center justify-between text-xs font-bold tabular-nums">
                 <span className="flex items-center gap-1 text-amber-600 dark:text-amber-300">
@@ -187,7 +187,7 @@ export function ReviewsView({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <form
           onSubmit={handleSubmit}
-          className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-5 sm:p-6 space-y-4 h-fit"
+          className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#223a32] p-5 sm:p-6 space-y-4 h-fit"
         >
           <h2 className="text-base font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
             <MessageSquarePlus className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
@@ -200,7 +200,7 @@ export function ReviewsView({
             onChange={(e) => setName(e.target.value)}
             placeholder="الاسم أو الكنية"
             required
-            className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#081712] px-3.5 py-2.5 text-sm"
+            className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#1b3029] px-3.5 py-2.5 text-sm"
           />
 
           <input
@@ -208,7 +208,7 @@ export function ReviewsView({
             value={role}
             onChange={(e) => setRole(e.target.value)}
             placeholder="الصفة (اختياري، مثل: طالب علم / زائر)"
-            className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#081712] px-3.5 py-2.5 text-sm"
+            className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#1b3029] px-3.5 py-2.5 text-sm"
           />
 
           <div className="space-y-1.5">
@@ -237,7 +237,7 @@ export function ReviewsView({
             onChange={(e) => setComment(e.target.value)}
             placeholder="اكتب انطباعك حول الموقع وأقسامه..."
             required
-            className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#081712] px-3.5 py-2.5 text-sm"
+            className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#1b3029] px-3.5 py-2.5 text-sm"
           />
 
           <button
@@ -256,7 +256,7 @@ export function ReviewsView({
               className={`rounded-3xl border p-5 space-y-3 transition-colors ${
                 rev.hidden
                   ? 'border-rose-400/50 bg-rose-50/60 dark:bg-rose-950/20'
-                  : 'border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a]'
+                  : 'border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#223a32]'
               }`}
             >
               <div className="flex items-start justify-between gap-2">

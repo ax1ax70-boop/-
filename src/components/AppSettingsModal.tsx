@@ -6,7 +6,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Flame,
-  Globe,
+  MapPin,
   Monitor,
   Moon,
   Palette,
@@ -14,6 +14,7 @@ import {
   Settings,
   Sparkles,
   Sun,
+  Sunrise,
   Type,
   X,
 } from 'lucide-react';
@@ -28,7 +29,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type {ThemeMode} from '../types';
+import type {CustomAdhkarItem, ThemeMode} from '../types';
 import {
   ADHKAR_STATS_UPDATED_EVENT,
   type WeeklyDayEntry,
@@ -52,6 +53,8 @@ import {
   usePageColor,
   useReadingPrefs,
 } from '../utils/readingPrefs';
+import type {SolarWindowInfo} from '../utils/solarTheme';
+import {CustomAdhkarAlertsManager} from './CustomAdhkarAlertsManager';
 
 export type AppSettingsSection = 'settings' | 'weekly-activity';
 
@@ -78,7 +81,7 @@ function WeeklyActivityTooltip({
   return (
     <div
       dir={isEn ? 'ltr' : 'rtl'}
-      className="rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/15 px-3.5 py-2.5 shadow-lg text-xs space-y-1.5 min-w-[165px]"
+      className="rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/15 px-3.5 py-2.5 shadow-lg text-xs space-y-1.5 min-w-[165px]"
     >
       <p className="font-bold text-[#0e1d25] dark:text-white border-b border-slate-100 dark:border-white/10 pb-1">
         {day?.fullLabel}
@@ -110,11 +113,14 @@ export function AppSettingsModal({
   initialSection = 'settings',
   onClose,
   appName,
+  customAdhkar = [],
   reminderSettings,
   onChangeReminderSettings,
   themeMode,
   onChangeThemeMode,
-  onToggleLanguage,
+  solarWindow,
+  onRequestSolarLocation,
+  solarLocating = false,
   onOpenAdhkar,
   onNotify,
 }: {
@@ -122,12 +128,16 @@ export function AppSettingsModal({
   initialSection?: AppSettingsSection;
   onClose: () => void;
   appName: string;
+  customAdhkar?: CustomAdhkarItem[];
   reminderSettings: AdhkarReminderSettings;
   onChangeReminderSettings: (next: AdhkarReminderSettings) => void;
   themeMode: ThemeMode;
   onChangeThemeMode: (mode: ThemeMode) => void;
-  onToggleLanguage: () => void;
-  onOpenAdhkar: () => void;
+  solarWindow?: SolarWindowInfo;
+  onRequestSolarLocation?: () => Promise<void>;
+  solarLocating?: boolean;
+  onToggleLanguage?: () => void;
+  onOpenAdhkar: (dhikrId?: string) => void;
   onNotify: (msg: string) => void;
 }) {
   const {isEn, tr, formatNumber} = useI18n();
@@ -219,7 +229,7 @@ export function AppSettingsModal({
         title,
         body,
         tag: `mawaedh-test-${Date.now()}`,
-        onClickNavigate: onOpenAdhkar,
+        onClickNavigate: () => onOpenAdhkar(),
       });
       if (sentOs) {
         onNotify(tr('تم إرسال إشعار محلي تجريبي بنجاح', 'Test local notification sent'));
@@ -249,7 +259,7 @@ export function AppSettingsModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xl rounded-3xl bg-white dark:bg-[#0c211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-2xl space-y-5 max-h-[calc(100dvh-96px)] overflow-y-auto"
+        className="w-full max-w-xl rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-2xl space-y-5 max-h-[calc(100dvh-96px)] overflow-y-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-white/10 pb-3">
@@ -280,7 +290,7 @@ export function AppSettingsModal({
         </div>
 
         {/* Section Switcher inside Adhkar Settings */}
-        <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-[#e8f6ff] dark:bg-[#112921]">
+        <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-[#e8f6ff] dark:bg-[#28453b]">
           <button
             type="button"
             onClick={() => setSection('settings')}
@@ -323,13 +333,13 @@ export function AppSettingsModal({
           /* Weekly Adhkar & Tasbeeh Activity Section */
           <div className="space-y-4">
             {/* Permanent Progress Cards (Today, Month, Overall + Hasanat) */}
-            <div className="rounded-2xl bg-[#eefaf3] dark:bg-[#0f241c] border border-[#006a46]/25 p-3.5 space-y-2.5">
+            <div className="rounded-2xl bg-[#eefaf3] dark:bg-[#28453b] border border-[#006a46]/25 p-3.5 space-y-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold text-[#006a46] dark:text-[#6cdba6]">
                 <span>{tr('إحصائية الأذكار والحسنات الدائمة', 'Permanent Adhkar & Hasanat Stats')}</span>
                 <span>«والله يضاعف لمن يشاء»</span>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-white dark:bg-[#0a1914] p-2.5 text-center border border-slate-200/70 dark:border-white/10">
+                <div className="rounded-xl bg-white dark:bg-[#1d332b] p-2.5 text-center border border-slate-200/70 dark:border-white/10">
                   <span className="text-[11px] font-bold text-[#006a46] dark:text-[#6cdba6] block">إنجاز اليوم</span>
                   <span className="text-base font-extrabold text-[#0e1d25] dark:text-white tabular-nums block">
                     {formatNumber(progressCards.todayCount)}
@@ -338,7 +348,7 @@ export function AppSettingsModal({
                     +{formatNumber(progressCards.todayHasanat)} حسنة
                   </span>
                 </div>
-                <div className="rounded-xl bg-white dark:bg-[#0a1914] p-2.5 text-center border border-slate-200/70 dark:border-white/10">
+                <div className="rounded-xl bg-white dark:bg-[#1d332b] p-2.5 text-center border border-slate-200/70 dark:border-white/10">
                   <span className="text-[11px] font-bold text-[#7c5800] dark:text-[#f2be5e] block">إنجاز هذا الشهر</span>
                   <span className="text-base font-extrabold text-[#0e1d25] dark:text-white tabular-nums block">
                     {formatNumber(progressCards.monthCount)}
@@ -377,7 +387,7 @@ export function AppSettingsModal({
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/80 dark:border-white/10 p-3.5 space-y-1">
+              <div className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/80 dark:border-white/10 p-3.5 space-y-1">
                 <div className="flex items-center justify-between text-[11px] font-bold text-[#006a46] dark:text-[#6cdba6]">
                   <span>{tr('الأذكار والأدعية', 'Adhkar & Duas')}</span>
                   <Sun className="w-3.5 h-3.5 shrink-0" />
@@ -405,7 +415,7 @@ export function AppSettingsModal({
             </div>
 
             {/* Daily Activity Interactive Recharts Bar Chart */}
-            <section className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/80 dark:border-white/10 p-4 space-y-3">
+            <section className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/80 dark:border-white/10 p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-bold text-[#0e1d25] dark:text-white flex items-center gap-1.5">
@@ -475,7 +485,7 @@ export function AppSettingsModal({
 
               {/* Selected Day Breakdown */}
               {selectedDay && (
-                <div className="rounded-xl bg-white dark:bg-[#0b1f18] border border-slate-200/80 dark:border-white/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div className="font-bold text-[#0e1d25] dark:text-white">
                     {selectedDay.fullLabel}
                   </div>
@@ -550,7 +560,7 @@ export function AppSettingsModal({
           /* Existing Settings & Local Notifications Section */
           <>
             {/* Local Notifications Card */}
-            <section className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/80 dark:border-white/10 p-4 space-y-4">
+            <section className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/80 dark:border-white/10 p-4 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-[#ffdea8] text-[#271900] flex items-center justify-center shrink-0 mt-0.5">
@@ -577,14 +587,14 @@ export function AppSettingsModal({
                   className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
                     reminderSettings.enabled
                       ? 'bg-[#006a46] text-white'
-                      : 'bg-white dark:bg-[#0a1914] border border-slate-200 dark:border-white/15 text-[#3e4a42] dark:text-slate-300'
+                      : 'bg-white dark:bg-[#1d332b] border border-slate-200 dark:border-white/15 text-[#3e4a42] dark:text-slate-300'
                   }`}
                 >
                   {reminderSettings.enabled ? tr('مفعّل', 'Enabled') : tr('تفعيل', 'Enable')}
                 </button>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold px-3 py-2 rounded-xl bg-white/80 dark:bg-[#0a1914]">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold px-3 py-2 rounded-xl bg-white/80 dark:bg-[#1d332b]">
                 <span className="text-[#3e4a42] dark:text-slate-300">
                   {tr('حالة إذن إشعارات المتصفح/الجهاز:', 'Device Notification Permission:')}
                 </span>
@@ -610,7 +620,7 @@ export function AppSettingsModal({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Morning Picker */}
-                <div className="rounded-xl bg-white dark:bg-[#0b1f18] border border-slate-200/80 dark:border-white/10 p-3.5 space-y-2.5">
+                <div className="rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <label className="text-xs font-bold text-[#0e1d25] dark:text-white flex items-center gap-1.5">
                       <Sun className="w-4 h-4 text-[#b58100]" />
@@ -641,12 +651,12 @@ export function AppSettingsModal({
                       });
                     }}
                     dir="ltr"
-                    className="w-full min-h-[40px] px-3 rounded-lg bg-[#f4faff] dark:bg-[#112921] border border-slate-200 dark:border-white/10 text-sm font-bold text-[#0e1d25] dark:text-white disabled:opacity-50"
+                    className="w-full min-h-[40px] px-3 rounded-lg bg-[#f4faff] dark:bg-[#28453b] border border-slate-200 dark:border-white/10 text-sm font-bold text-[#0e1d25] dark:text-white disabled:opacity-50"
                   />
                 </div>
 
                 {/* Evening Picker */}
-                <div className="rounded-xl bg-white dark:bg-[#0b1f18] border border-slate-200/80 dark:border-white/10 p-3.5 space-y-2.5">
+                <div className="rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <label className="text-xs font-bold text-[#0e1d25] dark:text-white flex items-center gap-1.5">
                       <Moon className="w-4 h-4 text-[#006389] dark:text-[#80cfff]" />
@@ -677,10 +687,23 @@ export function AppSettingsModal({
                       });
                     }}
                     dir="ltr"
-                    className="w-full min-h-[40px] px-3 rounded-lg bg-[#f4faff] dark:bg-[#112921] border border-slate-200 dark:border-white/10 text-sm font-bold text-[#0e1d25] dark:text-white disabled:opacity-50"
+                    className="w-full min-h-[40px] px-3 rounded-lg bg-[#f4faff] dark:bg-[#28453b] border border-slate-200 dark:border-white/10 text-sm font-bold text-[#0e1d25] dark:text-white disabled:opacity-50"
                   />
                 </div>
               </div>
+
+              <CustomAdhkarAlertsManager
+                appName={appName}
+                customAdhkar={customAdhkar}
+                reminderSettings={reminderSettings}
+                onChangeReminderSettings={onChangeReminderSettings}
+                onOpenAdhkar={(dhikrId) => {
+                  onClose();
+                  onOpenAdhkar(dhikrId);
+                }}
+                onPermissionUpdated={setPermission}
+                onNotify={onNotify}
+              />
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <button
@@ -696,7 +719,7 @@ export function AppSettingsModal({
                 <button
                   type="button"
                   onClick={() => setSection('weekly-activity')}
-                  className="min-h-[40px] px-4 py-2 rounded-xl bg-white dark:bg-[#0b1f18] border border-slate-200 dark:border-white/10 text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5 transition-colors"
+                  className="min-h-[40px] px-4 py-2 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-1.5 transition-colors"
                 >
                   <BarChart3 className="w-3.5 h-3.5" />
                   <span>{tr('عرض النشاط الأسبوعي', 'View Weekly Activity')}</span>
@@ -710,12 +733,13 @@ export function AppSettingsModal({
                 {tr('المظهر ولغة الواجهة', 'Appearance & Language')}
               </h3>
 
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 {(
                   [
-                    {id: 'system', label: tr('تلقائي', 'Auto'), Icon: Monitor},
+                    {id: 'system', label: tr('تلقائي النظام', 'System'), Icon: Monitor},
                     {id: 'light', label: tr('نهاري', 'Light'), Icon: Sun},
                     {id: 'dark', label: tr('ليلي', 'Dark'), Icon: Moon},
+                    {id: 'solar', label: tr('الشروق والغروب', 'Sunrise/Sunset'), Icon: Sunrise},
                   ] as const
                 ).map(({id, label, Icon}) => {
                   const active = themeMode === id;
@@ -728,14 +752,81 @@ export function AppSettingsModal({
                       className={`min-h-[42px] px-2.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
                         active
                           ? 'bg-[#006a46] text-white'
-                          : 'bg-white dark:bg-[#0a1914] text-[#3e4a42] dark:text-slate-300 border border-slate-200/70 dark:border-white/10'
+                          : 'bg-white dark:bg-[#1d332b] text-[#3e4a42] dark:text-slate-300 border border-slate-200/70 dark:border-white/10'
                       }`}
                     >
                       <Icon className="w-4 h-4 shrink-0" />
-                      <span>{label}</span>
+                      <span className="truncate">{label}</span>
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Automatic Theme by Local Sunrise & Sunset */}
+              <div className="rounded-xl bg-white dark:bg-[#1d332b] border border-slate-200/70 dark:border-white/10 p-3 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-1.5">
+                      <Sunrise className="w-3.5 h-3.5 text-[#7c5800] dark:text-[#f2be5e] shrink-0" />
+                      <span>{tr('تبديل السمة تلقائياً حسب الشروق والغروب', 'Auto Theme by Local Sunrise & Sunset')}</span>
+                    </p>
+                    <p className="text-[11px] text-[#6e7a71] dark:text-slate-400">
+                      {themeMode === 'solar'
+                        ? solarWindow?.usingLocation
+                          ? tr('مفعّل الآن بدقة وفق موقعك الجغرافي', 'Active using your geographic coordinates')
+                          : tr('مفعّل بتوقيت تقريبي (٦ ص – ٦ م) حتى تحديد الموقع', 'Active with fallback hours (6 AM – 6 PM) until location is granted')
+                        : tr('يتحوّل التطبيق تلقائياً للنهاري عند الشروق والليلي عند الغروب', 'Automatically switches to Light at sunrise and Dark at sunset')}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={themeMode === 'solar'}
+                    onClick={() => onChangeThemeMode(themeMode === 'solar' ? 'light' : 'solar')}
+                    className={`min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 ${
+                      themeMode === 'solar'
+                        ? 'bg-[#006a46] text-white'
+                        : 'bg-[#f3f6f4] dark:bg-white/10 text-[#0e1d25] dark:text-white'
+                    }`}
+                  >
+                    {themeMode === 'solar' ? tr('مفعّل ✓', 'Enabled ✓') : tr('تفعيل', 'Enable')}
+                  </button>
+                </div>
+
+                {solarWindow && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-white/10 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-3 text-[#3e4a42] dark:text-slate-300 tabular-nums font-semibold">
+                      <span>{tr(`الشروق: ${solarWindow.sunriseLabel}`, `Sunrise: ${solarWindow.sunriseLabel}`)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{tr(`الغروب: ${solarWindow.sunsetLabel}`, `Sunset: ${solarWindow.sunsetLabel}`)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="text-[#006a46] dark:text-[#6cdba6] font-bold">
+                        {solarWindow.isNight
+                          ? tr('الفترة الحالية: ليل', 'Current: Night')
+                          : tr('الفترة الحالية: نهار', 'Current: Day')}
+                      </span>
+                    </div>
+
+                    {onRequestSolarLocation && (
+                      <button
+                        type="button"
+                        disabled={solarLocating}
+                        onClick={() => void onRequestSolarLocation()}
+                        className="min-h-[34px] px-2.5 py-1 rounded-lg bg-[#fffbf2] dark:bg-[#28453b] border border-[#f2be5e]/45 text-[#7c5800] dark:text-[#ffdea8] font-bold inline-flex items-center gap-1.5 hover:bg-[#ffdea8]/40 transition-colors disabled:opacity-60"
+                      >
+                        <MapPin className="w-3.5 h-3.5 shrink-0" />
+                        <span>
+                          {solarLocating
+                            ? tr('جاري تحديد الموقع...', 'Locating...')
+                            : solarWindow.usingLocation
+                              ? tr('تحديث موقعي', 'Update Location')
+                              : tr('تحديد موقعي الجغرافي', 'Use My Location')}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2 pt-1">
@@ -760,7 +851,7 @@ export function AppSettingsModal({
                         className={`rounded-xl px-2 py-2 border text-[11px] font-bold flex flex-col items-center gap-1.5 transition-all ${
                           selected
                             ? 'border-[#006a46] bg-[#006a46]/10 dark:bg-[#6cdba6]/15 text-[#006a46] dark:text-[#6cdba6] ring-2 ring-[#006a46]/30'
-                            : 'border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0a1914] text-[#3e4a42] dark:text-slate-300'
+                            : 'border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1d332b] text-[#3e4a42] dark:text-slate-300'
                         }`}
                       >
                         <span
@@ -777,21 +868,10 @@ export function AppSettingsModal({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={onToggleLanguage}
-                className="w-full min-h-[42px] px-4 py-2 rounded-xl bg-white dark:bg-[#0a1914] border border-slate-200/80 dark:border-white/10 text-xs font-bold text-[#0e1d25] dark:text-white flex items-center justify-between"
-              >
-                <span className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-[#006a46] dark:text-[#6cdba6]" />
-                  <span>{tr('تبديل لغة التطبيق', 'Switch App Language')}</span>
-                </span>
-                <span className="text-[#006a46] dark:text-[#6cdba6]">{isEn ? 'العربية' : 'English'}</span>
-              </button>
             </section>
 
             {/* Manual App Font Size Control */}
-            <section className="rounded-2xl bg-[#eefaf3] dark:bg-[#0f241c] border border-[#006a46]/25 p-4 space-y-3">
+            <section className="rounded-2xl bg-[#eefaf3] dark:bg-[#28453b] border border-[#006a46]/25 p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Type className="w-4 h-4 text-[#006a46] dark:text-[#6cdba6]" />
@@ -799,7 +879,7 @@ export function AppSettingsModal({
                     {tr('التحكم اليدوي بحجم خط التطبيق', 'Manual App Font Size')}
                   </h3>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-lg bg-white dark:bg-[#0a1914] border border-[#006a46]/20 text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
+                <span className="px-2.5 py-0.5 rounded-lg bg-white dark:bg-[#1d332b] border border-[#006a46]/20 text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
                   {formatNumber(activeFontSizePx)} px
                 </span>
               </div>
@@ -809,7 +889,7 @@ export function AppSettingsModal({
                   type="button"
                   onClick={() => setCustomFontSizePx(activeFontSizePx - 1)}
                   aria-label={tr('تصغير الخط', 'Decrease font size')}
-                  className="min-w-[40px] min-h-[40px] rounded-xl bg-white dark:bg-[#0a1914] border border-slate-200 dark:border-white/15 font-extrabold text-sm text-[#006a46] dark:text-[#6cdba6] hover:bg-emerald-50"
+                  className="min-w-[40px] min-h-[40px] rounded-xl bg-white dark:bg-[#1d332b] border border-slate-200 dark:border-white/15 font-extrabold text-sm text-[#006a46] dark:text-[#6cdba6] hover:bg-emerald-50"
                 >
                   A-
                 </button>
@@ -827,7 +907,7 @@ export function AppSettingsModal({
                   type="button"
                   onClick={() => setCustomFontSizePx(activeFontSizePx + 1)}
                   aria-label={tr('تكبير الخط', 'Increase font size')}
-                  className="min-w-[40px] min-h-[40px] rounded-xl bg-white dark:bg-[#0a1914] border border-slate-200 dark:border-white/15 font-extrabold text-sm text-[#006a46] dark:text-[#6cdba6] hover:bg-emerald-50"
+                  className="min-w-[40px] min-h-[40px] rounded-xl bg-white dark:bg-[#1d332b] border border-slate-200 dark:border-white/15 font-extrabold text-sm text-[#006a46] dark:text-[#6cdba6] hover:bg-emerald-50"
                 >
                   A+
                 </button>
@@ -837,7 +917,7 @@ export function AppSettingsModal({
                     stepFontSize('reset');
                     onNotify(tr(`تمت استعادة حجم الخط الافتراضي (${DEFAULT_FONT_SIZE_PX}px)`, 'Default font size restored'));
                   }}
-                  className="min-h-[40px] px-3 rounded-xl bg-white dark:bg-[#0a1914] border border-slate-200 dark:border-white/15 text-xs font-bold text-[#3e4a42] dark:text-slate-200"
+                  className="min-h-[40px] px-3 rounded-xl bg-white dark:bg-[#1d332b] border border-slate-200 dark:border-white/15 text-xs font-bold text-[#3e4a42] dark:text-slate-200"
                 >
                   {tr('افتراضي', 'Reset')}
                 </button>
@@ -845,7 +925,7 @@ export function AppSettingsModal({
 
               <p
                 style={{fontSize: `${activeFontSizePx}px`, lineHeight: 1.7}}
-                className="rounded-xl bg-white/85 dark:bg-[#0a1914] px-3.5 py-2.5 text-[#0e1d25] dark:text-slate-100 border border-slate-200/70 dark:border-white/10"
+                className="rounded-xl bg-white/85 dark:bg-[#1d332b] px-3.5 py-2.5 text-[#0e1d25] dark:text-slate-100 border border-slate-200/70 dark:border-white/10"
               >
                 {tr(
                   '﴿أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ﴾ — معاينة مباشرة لحجم الخط الحالي',

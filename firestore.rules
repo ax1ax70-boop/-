@@ -220,6 +220,42 @@ service cloud.firestore {
         && (!('bookmarkedFatwaIds' in data) || (data.bookmarkedFatwaIds is list && data.bookmarkedFatwaIds.size() <= 200));
     }
 
+    function isValidTelemetryCounters(data) {
+      return data.keys().hasAll(['visitorsCount', 'clicksCount', 'motherPrayersCount', 'registeredMembersCount', 'updatedAt'])
+        && data.keys().hasOnly(['visitorsCount', 'clicksCount', 'motherPrayersCount', 'registeredMembersCount', 'updatedAt'])
+        && data.visitorsCount is int && data.visitorsCount >= 4580
+        && data.clicksCount is int && data.clicksCount >= 0
+        && data.motherPrayersCount is int && data.motherPrayersCount >= 0
+        && data.registeredMembersCount is int && data.registeredMembersCount >= 0
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicMember(data) {
+      return data.keys().hasAll(['id', 'displayName', 'createdAt'])
+        && data.keys().hasOnly(['id', 'displayName', 'lastLoginAt', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && (!('lastLoginAt' in data) || (data.lastLoginAt is string && data.lastLoginAt.size() <= 64))
+        && data.createdAt is timestamp
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidQuizLeaderboardEntry(data) {
+      return data.keys().hasAll(['id', 'nickname', 'category', 'score', 'correctCount', 'totalQuestions', 'createdAt'])
+        && data.keys().hasOnly([
+          'id', 'nickname', 'category', 'score', 'correctCount',
+          'totalQuestions', 'streakDays', 'dateKey', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.nickname is string && data.nickname.size() >= 2 && data.nickname.size() <= 40
+        && data.category in ['all', 'aqeedah', 'quran', 'hadith_seerah', 'fiqh', 'akhlaq']
+        && data.score is int && data.score >= 0 && data.score <= 50000
+        && data.correctCount is int && data.correctCount >= 0 && data.correctCount <= 500
+        && data.totalQuestions is int && data.totalQuestions >= 1 && data.totalQuestions <= 500
+        && (!('streakDays' in data) || (data.streakDays is int && data.streakDays >= 0 && data.streakDays <= 3650))
+        && (!('dateKey' in data) || (data.dateKey is string && data.dateKey.size() <= 16));
+    }
+
     // Connection test probe (safe single-doc get)
     match /test/connection {
       allow get: if true;
@@ -388,6 +424,60 @@ service cloud.firestore {
           'appName', 'appTagline', 'brandHandle', 'heroWisdomText', 'heroWisdomAuthor',
           'motherPrayerText', 'maintenanceMode', 'updatedAt'
         ]);
+    }
+
+    // Global strictly monotonic telemetry counters (synced across devices & restarts)
+    match /site_telemetry/{docId} {
+      allow get: if docId == 'counters';
+      allow create: if docId == 'counters'
+        && isValidTelemetryCounters(incoming())
+        && incoming().visitorsCount <= 250000;
+      allow update: if docId == 'counters'
+        && isValidTelemetryCounters(incoming())
+        && incoming().visitorsCount >= existing().visitorsCount
+        && incoming().visitorsCount <= existing().visitorsCount + 1000
+        && incoming().clicksCount >= existing().clicksCount
+        && incoming().clicksCount <= existing().clicksCount + 15000
+        && incoming().motherPrayersCount >= existing().motherPrayersCount
+        && incoming().motherPrayersCount <= existing().motherPrayersCount + 500
+        && incoming().registeredMembersCount >= existing().registeredMembersCount
+        && incoming().registeredMembersCount <= existing().registeredMembersCount + 100;
+    }
+
+    // Privacy-safe masked member labels (zero PII; persisted across restarts & devices)
+    match /public_members/{memberId} {
+      allow get: if isValidId(memberId);
+      allow list: if resource.data.displayName is string;
+      allow create: if isValidId(memberId)
+        && isValidPublicMember(incoming())
+        && incoming().id == memberId;
+      allow update: if isValidId(memberId)
+        && isValidPublicMember(incoming())
+        && hasImmutableCreatedAt(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'lastLoginAt', 'updatedAt']);
+      allow delete: if isAdmin() && isValidId(memberId);
+    }
+
+    // Daily Dawah Quiz Leaderboard (privacy-safe nickname + monotonic score per category)
+    match /quiz_leaderboard/{entryId} {
+      allow get: if isValidId(entryId);
+      allow list: if resource.data.category in ['all', 'aqeedah', 'quran', 'hadith_seerah', 'fiqh', 'akhlaq'];
+      allow create: if isValidId(entryId)
+        && isValidQuizLeaderboardEntry(incoming())
+        && incoming().id == entryId
+        && isValidCreatedAt(incoming())
+        && (!('updatedAt' in incoming()) || incoming().updatedAt == request.time);
+      allow update: if isValidId(entryId)
+        && isValidQuizLeaderboardEntry(incoming())
+        && hasImmutableCreatedAt(incoming())
+        && incoming().id == existing().id
+        && incoming().category == existing().category
+        && incoming().score >= existing().score
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'nickname', 'score', 'correctCount', 'totalQuestions', 'streakDays', 'dateKey', 'updatedAt'
+        ]);
+      allow delete: if isAdmin() && isValidId(entryId);
     }
   }
 }

@@ -16,21 +16,16 @@ import {
   Share2,
   Shield,
   ShieldCheck,
-  UserCheck,
   Users,
 } from 'lucide-react';
 import {useCallback, useEffect, useState, type FormEvent} from 'react';
-import type {SiteConfig, VisitorProfile, VisitorTicketSummary} from '../types';
+import type {SectionStatsMap, SiteConfig, VisitorProfile, VisitorTicketSummary} from '../types';
 import {useI18n} from '../utils/i18n';
+import {useAdminShieldTrigger} from '../utils/adminShield';
 import {getPublicSiteUrl} from '../utils/storage';
+import {PWAInstallButton} from './PWAInstallButton';
 
 type UnifiedSubTab = 'about' | 'support' | 'share' | 'disclaimer';
-
-interface PublicRegisteredMember {
-  id: string;
-  name: string;
-  createdAt: string;
-}
 
 export function AboutSupportShareView({
   siteConfig,
@@ -38,10 +33,11 @@ export function AboutSupportShareView({
   visitorsCount = 0,
   onlineVisitorsCount = 1,
   clicksCount = 0,
-  motherPrayersCount = 0,
+  registeredMembersCount = 0,
+  sectionStats = {},
   initialSubTab = 'about',
   onMessageSubmitted,
-  onOpenVisitorAuth,
+  onShareAppLink,
   onOpenAdminShield,
   onNotify,
 }: {
@@ -51,13 +47,17 @@ export function AboutSupportShareView({
   onlineVisitorsCount?: number;
   clicksCount?: number;
   motherPrayersCount?: number;
+  registeredMembersCount?: number;
+  sectionStats?: SectionStatsMap;
   initialSubTab?: UnifiedSubTab;
   onMessageSubmitted?: () => void;
+  onShareAppLink?: () => void;
   onOpenVisitorAuth?: () => void;
   onOpenAdminShield?: () => void;
   onNotify: (msg: string) => void;
 }) {
   const {tr, isEn, formatNumber} = useI18n();
+  const adminShieldHandlers = useAdminShieldTrigger(onOpenAdminShield);
   const [subTab, setSubTab] = useState<UnifiedSubTab>(initialSubTab);
 
   // Support / Suggestions / Team Join state
@@ -81,10 +81,6 @@ export function AboutSupportShareView({
   const [ticketQuery, setTicketQuery] = useState('');
   const [tickets, setTickets] = useState<VisitorTicketSummary[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
-
-  // Public registered members names list (strictly names only — emails/phones stay Primary Admin only)
-  const [registeredMembers, setRegisteredMembers] = useState<PublicRegisteredMember[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
     setSubTab(initialSubTab);
@@ -122,25 +118,9 @@ export function AboutSupportShareView({
     [visitor?.id],
   );
 
-  const loadRegisteredMembers = useCallback(async () => {
-    setLoadingMembers(true);
-    try {
-      const res = await fetch('/api/visitors/names', {cache: 'no-store'});
-      if (res.ok) {
-        const data = (await res.json()) as {members?: PublicRegisteredMember[]};
-        setRegisteredMembers(Array.isArray(data.members) ? data.members : []);
-      }
-    } catch {
-      // Ignore offline failure
-    } finally {
-      setLoadingMembers(false);
-    }
-  }, []);
-
   useEffect(() => {
     void loadTickets('');
-    void loadRegisteredMembers();
-  }, [loadTickets, loadRegisteredMembers, visitor?.id]);
+  }, [loadTickets, visitor?.id]);
 
   const submitSuggestion = async (e: FormEvent) => {
     e.preventDefault();
@@ -163,13 +143,16 @@ export function AboutSupportShareView({
       const data = (await res.json()) as {ticketNumber?: string};
       if (!res.ok) throw new Error();
       setSugText('');
-      if (data.ticketNumber) {
-        setLastIssuedTicket(data.ticketNumber);
+      const cleanNo = (data.ticketNumber || '').replace(/^#?(?:REQ-?)?/i, '');
+      if (cleanNo) {
+        setLastIssuedTicket(cleanNo);
       }
       onMessageSubmitted?.();
       void loadTickets(ticketQuery);
       onNotify(
-        `تم إرسال طلبك بنجاح برقم متابعة ${data.ticketNumber || '#REQ'} مع إشعار فوري للإدارة`,
+        cleanNo
+          ? `تم إرسال طلبك بنجاح برقم ${cleanNo} مع إشعار فوري للإدارة`
+          : 'تم إرسال طلبك بنجاح مع إشعار فوري للإدارة',
       );
     } catch {
       onNotify(tr('تعذر إرسال الرسالة حالياً، حاول لاحقاً', 'Unable to send right now.'));
@@ -203,13 +186,16 @@ export function AboutSupportShareView({
       const data = (await res.json()) as {ticketNumber?: string};
       if (!res.ok) throw new Error();
       setVolSkills('');
-      if (data.ticketNumber) {
-        setLastIssuedTicket(data.ticketNumber);
+      const cleanNo = (data.ticketNumber || '').replace(/^#?(?:REQ-?)?/i, '');
+      if (cleanNo) {
+        setLastIssuedTicket(cleanNo);
       }
       onMessageSubmitted?.();
       void loadTickets(ticketQuery);
       onNotify(
-        `تم تسجيل طلبك برقم متابعة ${data.ticketNumber || '#REQ'} وإحالته لفريق الإدارة بنجاح`,
+        cleanNo
+          ? `تم تسجيل طلبك برقم ${cleanNo} وإحالته لفريق الإدارة بنجاح`
+          : 'تم تسجيل طلبك وإحالته لفريق الإدارة بنجاح',
       );
     } catch {
       onNotify(tr('تعذر إرسال الطلب حالياً', 'Unable to submit request right now.'));
@@ -219,7 +205,7 @@ export function AboutSupportShareView({
   };
 
   const publicAppUrl = getPublicSiteUrl();
-  const shareMessage = `🌿 *${siteConfig.appName}* — ${siteConfig.appTagline}\n\n📖 القرآن الكريم كاملاً · الأذكار والأدعية الجامعة · فتاوى أهل العلم · مكتبة الشيخ يحيى بن علي الحجوري والأئمة الكبار · قسم الصم والبكم · واحة الداعية الفاضلة أمي.\n\n🔗 ${publicAppUrl}`;
+  const shareMessage = `🌿 *${siteConfig.appName}*\n\n📖 القرآن الكريم كاملاً · الأذكار والأدعية الجامعة · فتاوى أهل العلم · مكتبة الشيخ يحيى بن علي الحجوري والأئمة الكبار · قسم الصم والبكم · واحة الداعية الفاضلة أمي.\n\n🔗 ${publicAppUrl}`;
 
   const handleShareApp = async () => {
     if (navigator.share) {
@@ -273,8 +259,8 @@ export function AboutSupportShareView({
         </h1>
         <p className="text-sm sm:text-base text-white/90 max-w-3xl leading-relaxed">
           {tr(
-            'تعرّف على رسالة منصة «مواعظ وعبر» منذ عام ٢٠١٥م، وأرسل مقترحاتك مع متابعة التذاكر (#REQ) جنباً إلى جنب، وشارك التطبيق مع أحبتك بخصوصية تامة وأمان.',
-            'Learn about Mawaedh & Ibar since 2015, submit proposals side by side with #REQ ticket tracking, review our scholarly principles, and share the app privately.',
+            'تعرّف على رسالة منصة «مواعظ وعبر» منذ عام ٢٠١٥م، وأرسل مقترحاتك مع متابعة الطلبات جنباً إلى جنب، وشارك التطبيق مع أحبتك بخصوصية تامة وأمان.',
+            'Learn about Mawaedh & Ibar since 2015, submit proposals side by side with ticket tracking, review our scholarly principles, and share the app privately.',
           )}
         </p>
 
@@ -282,9 +268,9 @@ export function AboutSupportShareView({
         <div className="flex flex-wrap items-center gap-2 pt-2">
           {(
             [
-              {id: 'about', label: tr('عن الموقع والمشاركة', 'About & Share'), Icon: Info},
-              {id: 'support', label: tr('المقترحات ومتابعة الطلبات (#REQ)', 'Proposals & #REQ Tracking'), Icon: ClipboardList},
-              {id: 'share', label: tr('مشاركة التطبيق السريعة', 'Quick Share'), Icon: Share2},
+              {id: 'about', label: tr('عن الموقع والمشاركة', 'About & Mission'), Icon: Info},
+              {id: 'support', label: tr('الدعم والطلبات وتثبيت التطبيق', 'Support, Tickets & Install'), Icon: ClipboardList},
+              {id: 'share', label: tr('مشاركة الرابط السريعة', 'Share App Link'), Icon: Share2},
               {id: 'disclaimer', label: tr('التنويه العلمي والحقوق', 'Disclaimer & Rights'), Icon: ShieldCheck},
             ] as const
           ).map((item) => {
@@ -313,7 +299,7 @@ export function AboutSupportShareView({
       {subTab === 'about' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            <section className="card-3d lg:col-span-7 rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-5">
+            <section className="card-3d lg:col-span-7 rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 shadow-xs space-y-5">
               <div className="flex items-center gap-3">
                 <div className="icon-3d w-10 h-10 rounded-2xl bg-[#008559] text-white flex items-center justify-center shrink-0">
                   <BookOpen className="w-5 h-5" />
@@ -344,7 +330,7 @@ export function AboutSupportShareView({
                 )}
               </p>
 
-              <div className="bg-[#e8f6ff] dark:bg-[#112921] rounded-2xl p-4.5 flex items-start gap-3">
+              <div className="bg-[#e8f6ff] dark:bg-[#28453b] rounded-2xl p-4.5 flex items-start gap-3">
                 <div className="icon-3d w-9 h-9 rounded-xl bg-[#ffdea8] text-[#271900] flex items-center justify-center shrink-0 mt-0.5">
                   <Award className="w-5 h-5" />
                 </div>
@@ -375,8 +361,8 @@ export function AboutSupportShareView({
                 {
                   title: tr('الخصوصية التامة والأمان', 'Full Privacy & Trust'),
                   body: tr(
-                    'التواصل المباشر وتقديم المقترحات يتم بسرية وأرقام متابعة رسمية (#REQ) دون كشف بيانات شخصية.',
-                    'All inquiries use protected request tickets (#REQ) with complete privacy.',
+                    'التواصل المباشر وتقديم المقترحات يتم بسرية وأرقام متابعة رسمية دون كشف بيانات شخصية.',
+                    'All inquiries use protected request ticket numbers with complete privacy.',
                   ),
                   Icon: ShieldCheck,
                   tone: 'bg-[#7c5800]/15 text-[#7c5800] dark:text-[#f2be5e]',
@@ -401,7 +387,7 @@ export function AboutSupportShareView({
                 return (
                   <div
                     key={item.title}
-                    className="card-3d rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 shadow-xs flex items-start gap-3.5"
+                    className="card-3d rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 shadow-xs flex items-start gap-3.5"
                   >
                     <div className={`icon-3d w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${item.tone}`}>
                       <Icon className="w-5 h-5" />
@@ -417,51 +403,6 @@ export function AboutSupportShareView({
               })}
             </section>
           </div>
-
-          {/* Organized App Sharing + Quick Support Strip inside About & Share */}
-          <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
-            <div className="lg:col-span-7 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6]">
-                <Share2 className="w-4 h-4 shrink-0" />
-                <span>{tr('مشاركة التطبيق · الدال على الخير كفاعله', 'Share App · Ongoing Charity')}</span>
-              </div>
-              <h3 className="text-lg font-extrabold text-[#0e1d25] dark:text-white">
-                {tr('انشر «مواعظ وعبر» بين أهلك ومجموعات الخير', 'Share Mawaedh & Ibar with Family & Friends')}
-              </h3>
-              <p className="text-xs sm:text-sm text-[#3e4a42] dark:text-slate-300 leading-relaxed">
-                {tr(
-                  'شارك الرابط المباشر للتطبيق أو أرسل مقترحك وتابعه عبر سجل الطلبات (#REQ) لنشر العلم النافع والأذكار والقرآن الكريم.',
-                  'Share the direct app link or send your proposals with #REQ tracking to help spread beneficial Islamic knowledge.',
-                )}
-              </p>
-            </div>
-            <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => void handleShareApp()}
-                className="min-h-[44px] px-4 py-2 rounded-xl bg-[#ffdea8] hover:bg-[#ffc968] text-[#271900] text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-colors"
-              >
-                <Share2 className="w-4 h-4 shrink-0" />
-                <span>{tr('مشاركة التطبيق', 'Share App')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleCopyLinkOnly()}
-                className="min-h-[44px] px-4 py-2 rounded-xl bg-[#e8f6ff] hover:bg-[#d7eefc] dark:bg-[#112921] text-[#006a46] dark:text-[#6cdba6] text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-colors"
-              >
-                <Copy className="w-4 h-4 shrink-0" />
-                <span>{tr('نسخ الرابط', 'Copy Link')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSubTab('support')}
-                className="sm:col-span-2 min-h-[44px] px-4 py-2 rounded-xl bg-[#006a46] hover:bg-[#005235] text-white text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition-colors"
-              >
-                <ClipboardList className="w-4 h-4 shrink-0" />
-                <span>{tr('إرسال مقترح ومتابعة الطلبات (#REQ)', 'Submit Proposal & Track #REQ')}</span>
-              </button>
-            </div>
-          </section>
         </div>
       )}
 
@@ -495,14 +436,14 @@ export function AboutSupportShareView({
               {supportFormTab === 'ideas' && (
                 <form
                   onSubmit={submitSuggestion}
-                  className="card-3d rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4"
+                  className="card-3d rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4"
                 >
                   <div>
                     <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white">
                       {tr('إرسال مقترح أو رسالة دعم بسرية تامة', 'Submit a Private Proposal or Support Inquiry')}
                     </h2>
                     <p className="text-xs text-[#6e7a71] dark:text-slate-400 mt-0.5">
-                      {tr('يصدر لك رقم متابعة (#REQ-...) تلقائياً في القائمة المجاورة', 'Generates a #REQ ticket in the adjacent tracking list')}
+                      {tr('يصدر لك رقم متابعة تلقائياً في القائمة المجاورة', 'Generates a ticket number in the adjacent tracking list')}
                     </p>
                   </div>
 
@@ -521,7 +462,7 @@ export function AboutSupportShareView({
                         className={`min-h-[40px] px-2.5 py-2 rounded-xl text-xs font-bold transition-colors ${
                           sugType === t.id
                             ? 'bg-[#006a46] text-white'
-                            : 'bg-[#e8f6ff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                            : 'bg-[#e8f6ff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                         }`}
                       >
                         {t.label}
@@ -534,7 +475,7 @@ export function AboutSupportShareView({
                     value={sugName}
                     onChange={(e) => setSugName(e.target.value)}
                     placeholder={tr('الاسم أو الكنية (اختياري)', 'Your name (optional)')}
-                    className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                    className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                   />
 
                   <textarea
@@ -546,7 +487,7 @@ export function AboutSupportShareView({
                       'اكتب مقترحك، أو مساهمتك، أو استفسارك ليصل مباشرة لقسم الرسائل لدى الإدارة...',
                       'Write your suggestion or inquiry...',
                     )}
-                    className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                    className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -555,14 +496,14 @@ export function AboutSupportShareView({
                       value={sugContact}
                       onChange={(e) => setSugContact(e.target.value)}
                       placeholder={tr('البريد أو وسيلة الرد (اختياري)', 'Email / contact (optional)')}
-                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                     />
                     <input
                       type="tel"
                       value={sugWhatsapp}
                       onChange={(e) => setSugWhatsapp(e.target.value)}
-                      placeholder="رقم واتساب للمتابعة (سري واختياري)"
-                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                      placeholder="واتساب للمتابعة مثال: 9665XXXXXXXX+ (اختياري)"
+                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                     />
                   </div>
 
@@ -573,7 +514,7 @@ export function AboutSupportShareView({
                   >
                     {sugSubmitting
                       ? tr('جاري الإرسال...', 'Sending...')
-                      : tr('إرسال وإصدار رقم متابعة (#REQ)', 'Submit & Issue #REQ Ticket')}
+                      : tr('إرسال وإصدار رقم الطلب', 'Submit & Issue Ticket Number')}
                   </button>
                 </form>
               )}
@@ -581,7 +522,7 @@ export function AboutSupportShareView({
               {supportFormTab === 'volunteer' && (
                 <form
                   onSubmit={submitVolunteer}
-                  className="card-3d rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4"
+                  className="card-3d rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4"
                 >
                   <div>
                     <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white">
@@ -597,7 +538,7 @@ export function AboutSupportShareView({
                     value={volName}
                     onChange={(e) => setVolName(e.target.value)}
                     placeholder={tr('الاسم أو الكنية (اختياري)', 'Your name (optional)')}
-                    className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                    className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                   />
 
                   <div className="space-y-1.5">
@@ -607,7 +548,7 @@ export function AboutSupportShareView({
                     <select
                       value={volField}
                       onChange={(e) => setVolField(e.target.value)}
-                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none"
+                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none"
                     >
                       <option value="التدقيق اللغوي والشرعي وتخريج الأحاديث">
                         التدقيق اللغوي والشرعي وتخريج الأحاديث
@@ -643,7 +584,7 @@ export function AboutSupportShareView({
                         className={`min-h-[42px] rounded-xl text-xs font-bold ${
                           volHours === h.id
                             ? 'bg-[#006a46] text-white'
-                            : 'bg-[#e8f6ff] dark:bg-[#112921] text-[#3e4a42] dark:text-slate-300'
+                            : 'bg-[#e8f6ff] dark:bg-[#28453b] text-[#3e4a42] dark:text-slate-300'
                         }`}
                       >
                         {h.label}
@@ -657,7 +598,7 @@ export function AboutSupportShareView({
                     value={volSkills}
                     onChange={(e) => setVolSkills(e.target.value)}
                     placeholder={tr('اذكر نبذة مختصرة عن خبرتك أو مهاراتك...', 'Briefly share your background or skills...')}
-                    className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#112921] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                    className="w-full rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -667,14 +608,14 @@ export function AboutSupportShareView({
                       value={volContact}
                       onChange={(e) => setVolContact(e.target.value)}
                       placeholder={tr('وسيلة التواصل الخاصة بك *', 'Your contact handle *')}
-                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                     />
                     <input
                       type="tel"
                       value={volWhatsapp}
                       onChange={(e) => setVolWhatsapp(e.target.value)}
-                      placeholder="رقم واتساب للمتابعة (اختياري)"
-                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                      placeholder="واتساب للمتابعة مثال: 9665XXXXXXXX+ (اختياري)"
+                      className="w-full min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
                     />
                   </div>
 
@@ -691,20 +632,20 @@ export function AboutSupportShareView({
               )}
             </div>
 
-            {/* Column 2: Side-by-Side Ticket Tracking List (#REQ-...) */}
-            <section className="card-3d lg:col-span-6 rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+            {/* Column 2: Side-by-Side Ticket Tracking List */}
+            <section className="card-3d lg:col-span-6 rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
               <div className="space-y-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h2 className="text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
                       <ClipboardList className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6] shrink-0" />
-                      <span>سجل ومتابعة الطلبات والاقتراحات (#REQ-...)</span>
+                      <span>سجل ومتابعة الطلبات والاقتراحات</span>
                     </h2>
                     <p className="text-xs text-[#6e7a71] dark:text-slate-400 mt-0.5">
-                      استعلم برقم الطلب (مثل REQ-1001) لمتابعة حالة المراجعة والرد الإداري بخصوصية تامة
+                      استعلم برقم الطلب (مثل 1001) لمتابعة حالة المراجعة والرد الإداري بخصوصية تامة
                     </p>
                   </div>
-                  <span className="px-2.5 py-1 rounded-xl bg-[#eefaf3] dark:bg-[#112921] text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold tabular-nums shrink-0">
+                  <span className="px-2.5 py-1 rounded-xl bg-[#eefaf3] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold tabular-nums shrink-0">
                     {formatNumber(tickets.length)}
                   </span>
                 </div>
@@ -722,8 +663,8 @@ export function AboutSupportShareView({
                       type="text"
                       value={ticketQuery}
                       onChange={(e) => setTicketQuery(e.target.value)}
-                      placeholder="ابحث برقم التذكرة مثل REQ-1001..."
-                      className="w-full min-h-[42px] rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#081712] pr-9 pl-3 text-xs font-bold"
+                      placeholder="ابحث برقم التذكرة مثل 1001..."
+                      className="w-full min-h-[42px] rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#1b3029] pr-9 pl-3 text-xs font-bold"
                     />
                   </div>
                   <button
@@ -744,7 +685,7 @@ export function AboutSupportShareView({
               {loadingTickets ? (
                 <p className="text-xs text-[#6e7a71] dark:text-slate-400 py-6 text-center">جاري تحميل سجل الطلبات...</p>
               ) : tickets.length === 0 ? (
-                <p className="text-xs sm:text-sm text-[#6e7a71] dark:text-slate-400 py-8 text-center rounded-2xl bg-[#f8faf9] dark:bg-[#081712] border border-dashed border-slate-200 dark:border-white/10">
+                <p className="text-xs sm:text-sm text-[#6e7a71] dark:text-slate-400 py-8 text-center rounded-2xl bg-[#f8faf9] dark:bg-[#1b3029] border border-dashed border-slate-200 dark:border-white/10">
                   لا توجد تذاكر مطابقة حالياً. قدّم مقترحاً أو طلب عمل من النموذج المجاور ليظهر رقمه هنا فوراً.
                 </p>
               ) : (
@@ -765,18 +706,18 @@ export function AboutSupportShareView({
                     return (
                       <div
                         key={t.id}
-                        className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] p-3.5 space-y-2"
+                        className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-3.5 space-y-2"
                       >
                         <div className="flex items-center justify-between gap-2 text-xs">
                           <span dir="ltr" className="font-extrabold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
-                            {t.ticketNumber}
+                            {t.ticketNumber.replace(/^#?(?:REQ-?)?/i, '')}
                           </span>
                           <span className={`px-2.5 py-0.5 rounded-lg font-bold ${statusColor}`}>{statusLabel}</span>
                         </div>
                         <p className="text-xs font-bold text-[#7c5800] dark:text-[#f2be5e]">{t.categoryLabel}</p>
                         <p className="text-xs sm:text-sm text-[#1e2d25] dark:text-slate-200 line-clamp-2">{t.text}</p>
                         {t.adminNote && (
-                          <p className="text-xs rounded-xl bg-white dark:bg-[#0c211a] border border-slate-200/70 dark:border-white/10 p-2.5 text-[#0e1d25] dark:text-slate-200">
+                          <p className="text-xs rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/70 dark:border-white/10 p-2.5 text-[#0e1d25] dark:text-slate-200">
                             <span className="font-bold text-[#006a46] dark:text-[#6cdba6]">رد الإدارة: </span>
                             {t.adminNote}
                           </p>
@@ -789,55 +730,52 @@ export function AboutSupportShareView({
             </section>
           </div>
 
-          {/* Registered Members Names List + Platform Transparency Metrics */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            {/* Public Privacy-Safe List of Registered Members (Names Only) */}
-            <section className="card-3d lg:col-span-6 rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-base sm:text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
-                    <Users className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
-                    <span>قائمة المسجلين وأسمائهم</span>
-                  </h2>
-                  <p className="text-xs text-[#6e7a71] dark:text-slate-400 mt-0.5">
-                    أسماء الأعضاء المسجلين بالبريد الإلكتروني ورقم الجوال (مع حماية سرية البريد والأرقام)
-                  </p>
-                </div>
-                {onOpenVisitorAuth && (
-                  <button
-                    type="button"
-                    onClick={onOpenVisitorAuth}
-                    className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-[#006a46] hover:bg-[#005235] text-white text-xs font-extrabold flex items-center gap-1.5 shrink-0"
-                  >
-                    <UserCheck className="w-3.5 h-3.5" />
-                    <span>{visitor ? visitor.name : tr('تسجيل / دخول', 'Register / Sign In')}</span>
-                  </button>
-                )}
+          {/* Install & Share Link + Platform Transparency Metrics (Balanced 2-Column Row) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            {/* Column 1: App Install & Link Share Hub */}
+            <section className="card-3d lg:col-span-6 rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+              <div className="space-y-1.5">
+                <h2 className="text-base sm:text-lg font-extrabold text-[#006a46] dark:text-[#6cdba6] flex items-center gap-2">
+                  <Share2 className="w-5 h-5 shrink-0" />
+                  <span>{tr('تثبيت التطبيق ومشاركة الرابط', 'Install App & Share Link')}</span>
+                </h2>
+                <p className="text-xs text-[#3e4a42] dark:text-slate-300 leading-relaxed">
+                  {tr(
+                    'ثبّت تطبيق «مواعظ وعبر» على جهازك للعمل بدون إنترنت، أو انسخ الرابط الرسمي لمشاركته.',
+                    'Install the app for offline access, or copy and share the direct official link.',
+                  )}
+                </p>
               </div>
 
-              {loadingMembers ? (
-                <p className="text-xs text-[#6e7a71] dark:text-slate-400 py-3">جاري تحميل قائمة المسجلين...</p>
-              ) : registeredMembers.length === 0 ? (
-                <p className="text-xs text-[#6e7a71] dark:text-slate-400 py-3">
-                  لم يسجّل أي عضو بعد — سجّل اسمك وبريدك ورقم جوالك ليظهر اسمك في قائمة المسجلين.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-0.5">
-                  {registeredMembers.map((m) => (
-                    <div
-                      key={m.id}
-                      className="rounded-xl border border-slate-200/80 dark:border-white/10 bg-[#f4faf7] dark:bg-[#081712] px-3 py-2 flex items-center gap-2"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-[#008559] shrink-0" />
-                      <span className="text-xs font-extrabold text-[#0e1d25] dark:text-white truncate">{m.name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <PWAInstallButton
+                variant="box"
+                onNotify={onNotify}
+                onShareAppLink={() => {
+                  if (onShareAppLink) {
+                    onShareAppLink();
+                  } else {
+                    void handleShareApp();
+                  }
+                }}
+              />
+
+              <div className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-3 flex items-center justify-between gap-2">
+                <span dir="ltr" className="text-xs font-bold text-[#006389] dark:text-[#80cfff] truncate">
+                  {publicAppUrl}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyLinkOnly()}
+                  className="min-h-[34px] px-3 py-1 rounded-xl bg-[#006a46] hover:bg-[#005235] text-white text-xs font-bold flex items-center gap-1.5 shrink-0"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{tr('نسخ الرابط', 'Copy')}</span>
+                </button>
+              </div>
             </section>
 
-            {/* Transparency Stats */}
-            <section className="card-3d lg:col-span-6 rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
+            {/* Column 2: Transparency Stats */}
+            <section className="card-3d lg:col-span-6 rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-xs space-y-4">
               <div>
                 <h2 className="text-base sm:text-lg font-extrabold text-[#006a46] dark:text-[#6cdba6]">
                   {tr('سجل الشفافية وإحصائيات المنصة', 'Transparency Ledger & Platform Impact')}
@@ -851,18 +789,20 @@ export function AboutSupportShareView({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-[#f4faff] dark:bg-[#112921] border border-slate-200/70 dark:border-white/10 p-3.5 rounded-2xl flex items-center gap-3">
+                <div className="bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10 p-3.5 rounded-2xl flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[#006a46]/10 text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center shrink-0">
                     <Eye className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-[11px] text-[#6e7a71] dark:text-slate-400 block">إجمالي الزوار</span>
+                    <span className="text-[11px] text-[#6e7a71] dark:text-slate-400 block">
+                      {tr('إجمالي الزيارات التراكمي', 'Cumulative Visits')}
+                    </span>
                     <span className="text-lg font-bold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
                       {formatNumber(visitorsCount)}
                     </span>
                   </div>
                 </div>
-                <div className="bg-[#eefaf3] dark:bg-[#0d241b] border border-[#008559]/30 p-3.5 rounded-2xl flex items-center gap-3">
+                <div className="bg-[#eefaf3] dark:bg-[#243e35] border border-[#008559]/30 p-3.5 rounded-2xl flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[#008559]/15 text-[#008559] dark:text-[#6cdba6] flex items-center justify-center shrink-0">
                     <Users className="w-5 h-5" />
                   </div>
@@ -873,27 +813,71 @@ export function AboutSupportShareView({
                     </span>
                   </div>
                 </div>
-                <div className="bg-[#f4faff] dark:bg-[#112921] border border-slate-200/70 dark:border-white/10 p-3.5 rounded-2xl flex items-center gap-3">
+                <div className="bg-[#f4faff] dark:bg-[#28453b] border border-slate-200/70 dark:border-white/10 p-3.5 rounded-2xl flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[#006389]/10 text-[#006389] dark:text-[#80cfff] flex items-center justify-center shrink-0">
                     <MousePointerClick className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-[11px] text-[#6e7a71] dark:text-slate-400 block">التفاعلات</span>
+                    <span className="text-[11px] text-[#6e7a71] dark:text-slate-400 block">إجمالي التفاعلات</span>
                     <span className="text-lg font-bold text-[#006389] dark:text-[#80cfff] tabular-nums">
                       {formatNumber(clicksCount)}
                     </span>
                   </div>
                 </div>
-                <div className="bg-[#fffbf2] dark:bg-[#13221c] border border-[#f2be5e]/35 p-3.5 rounded-2xl flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#ffdea8] text-[#7c5800] flex items-center justify-center shrink-0">
-                    <Heart className="w-5 h-5" />
+                <div className="bg-[#eefaf3] dark:bg-[#1b3029] border border-[#006a46]/25 p-3.5 rounded-2xl flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#006a46]/15 text-[#006a46] dark:text-[#6cdba6] flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-[11px] text-[#6e7a71] dark:text-slate-400 block">تأمينات دعاء الوالدة</span>
-                    <span className="text-lg font-bold text-[#7c5800] dark:text-[#f2be5e] tabular-nums">
-                      {formatNumber(motherPrayersCount)}
+                    <span className="text-[11px] text-[#6e7a71] dark:text-slate-400 block">الأعضاء المسجلون</span>
+                    <span className="text-lg font-bold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
+                      {formatNumber(registeredMembersCount)}
                     </span>
                   </div>
+                </div>
+              </div>
+
+              {/* Per-Section Entry & Interactions Log */}
+              <div className="pt-3 border-t border-slate-200/70 dark:border-white/10 space-y-2.5">
+                <h3 className="text-xs sm:text-sm font-extrabold text-[#0e1d25] dark:text-white">
+                  {tr('دخول الزوار وتفاعلات كل قسم (تراكمي)', 'Cumulative Entries & Interactions by Section')}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(
+                    [
+                      ['home', tr('الصفحة الرئيسية', 'Home')],
+                      ['quran', tr('المصحف الشريف', 'Noble Quran')],
+                      ['adhkar', tr('الأذكار والأدعية', 'Adhkar & Duas')],
+                      ['fatawa', tr('الفتاوى', 'Fatawa')],
+                      ['library', tr('المكتبة العلمية', 'Scientific Library')],
+                      ['cards', tr('البطاقات الدعوية', 'Dawah Cards')],
+                      ['quiz', tr('الاختبار الدعوي', 'Dawah Quiz')],
+                      ['wird', tr('الورد اليومي', 'Daily Wird')],
+                      ['mother-oasis', tr('واحة وقصص الوالدة', "Mother's Oasis")],
+                      ['poetry', tr('الشعر والطرائف', 'Poetry & Anecdotes')],
+                      ['archive', tr('الأرشيف الشامل', 'Permanent Archive')],
+                      ['videos', tr('المقاطع المرئية', 'Video Clips')],
+                      ['deaf-mute', tr('قسم الصم والبكم', 'Deaf & Mute')],
+                      ['reviews', tr('آراء وتقييمات الزوار', 'Visitor Reviews')],
+                      ['about-support', tr('عن الموقع والدعم', 'About & Support')],
+                    ] as const
+                  ).map(([key, label]) => {
+                    const entry = sectionStats[key] || {visits: 0, interactions: 0};
+                    return (
+                      <div
+                        key={key}
+                        className="rounded-xl bg-[#f8faf9] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 px-3 py-2 flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="font-bold text-[#0e1d25] dark:text-white truncate">{label}</span>
+                        <span className="text-[11px] font-semibold text-[#006a46] dark:text-[#6cdba6] tabular-nums whitespace-nowrap shrink-0">
+                          {tr(
+                            `الزيارات: ${formatNumber(entry.visits)} · المشاركات: ${formatNumber(entry.shares || 0)} · التفاعل: ${formatNumber(entry.interactions)}`,
+                            `${entry.visits} / ${entry.shares || 0} / ${entry.interactions}`,
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </section>
@@ -903,7 +887,7 @@ export function AboutSupportShareView({
 
       {/* Sub-Tab 3: Organized Share Application Hub */}
       {subTab === 'share' && (
-        <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 sm:p-8 shadow-xs space-y-6">
+        <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 sm:p-8 shadow-xs space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
             <div className="lg:col-span-7 space-y-4">
               <div className="flex items-center gap-3">
@@ -923,7 +907,7 @@ export function AboutSupportShareView({
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/80 dark:border-white/10 p-4 space-y-2">
+              <div className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/80 dark:border-white/10 p-4 space-y-2">
                 <span className="text-xs font-bold text-[#006a46] dark:text-[#6cdba6]">نص الدعوة الجاهز للمشاركة:</span>
                 <p className="text-xs sm:text-sm text-[#1e2d25] dark:text-slate-200 whitespace-pre-line leading-relaxed">
                   {shareMessage}
@@ -932,6 +916,17 @@ export function AboutSupportShareView({
             </div>
 
             <div className="lg:col-span-5 grid grid-cols-1 gap-2.5">
+              <PWAInstallButton
+                variant="box"
+                onNotify={onNotify}
+                onShareAppLink={() => {
+                  if (onShareAppLink) {
+                    onShareAppLink();
+                  } else {
+                    void handleShareApp();
+                  }
+                }}
+              />
               <button
                 type="button"
                 onClick={() => void handleShareApp()}
@@ -943,7 +938,7 @@ export function AboutSupportShareView({
               <button
                 type="button"
                 onClick={() => void handleCopyFullShareMessage()}
-                className="w-full min-h-[46px] px-5 py-2.5 rounded-2xl bg-[#e8f6ff] hover:bg-[#d7eefc] dark:bg-[#112921] text-[#006a46] dark:text-[#6cdba6] text-sm font-extrabold flex items-center justify-center gap-2"
+                className="w-full min-h-[46px] px-5 py-2.5 rounded-2xl bg-[#e8f6ff] hover:bg-[#d7eefc] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] text-sm font-extrabold flex items-center justify-center gap-2"
               >
                 <Copy className="w-4 h-4" />
                 <span>{tr('نسخ رسالة المشاركة كاملة', 'Copy Full Invite Message')}</span>
@@ -983,7 +978,7 @@ export function AboutSupportShareView({
 
       {/* Sub-Tab 4: Scientific Disclaimer & 2027 Copyright */}
       {subTab === 'disclaimer' && (
-        <section className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 sm:p-8 shadow-xs space-y-5">
+        <section className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 sm:p-8 shadow-xs space-y-5">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-[#7c5800]/15 text-[#7c5800] dark:text-[#f2be5e] flex items-center justify-center shrink-0">
               <ShieldCheck className="w-6 h-6" />
@@ -998,7 +993,7 @@ export function AboutSupportShareView({
             </div>
           </div>
 
-          <div className="rounded-2xl bg-[#fffbf2] dark:bg-[#13201b] border border-[#f2be5e]/40 p-5 space-y-2.5">
+          <div className="rounded-2xl bg-[#fffbf2] dark:bg-[#243b32] border border-[#f2be5e]/40 p-5 space-y-2.5">
             <p className="text-sm text-[#1e2d25] dark:text-slate-200 leading-loose">
               تعتمد منصة «مواعظ وعبر» في جميع ما تنشره من فتاوى ودروس ومؤلفات وبطاقات وإجابات على الكتاب والسنة بفهم سلف الأمة، وعلى مؤلفات وشروح أئمة أهل السنة والجماعة المعتمدين (الإمام مقبل بن هادي الوادعي، سماحة الشيخ عبد العزيز بن باز، فضيلة الشيخ محمد بن صالح العثيمين، الإمام المحدث محمد ناصر الدين الألباني رحمهم الله، وفضيلة الشيخ يحيى بن علي الحجوري ومشايخ وطلبة دار الحديث حفظهم الله)، مع التحري التام لسلامة النصوص والأحاديث والابتعاد المطلق عن أي مناهج حزبية أو مصادر غير موثوقة.
             </p>
@@ -1007,7 +1002,7 @@ export function AboutSupportShareView({
             </p>
           </div>
 
-          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/80 dark:border-white/10 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/80 dark:border-white/10 p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#0e1d25] dark:text-white">
               <Clock className="w-4 h-4 text-[#006a46] dark:text-[#6cdba6]" />
               <span>جميع الحقوق محفوظة لـ «مواعظ وعبر» © ٢٠٢٧ م · جميع الحقوق محفوظة</span>
@@ -1015,9 +1010,9 @@ export function AboutSupportShareView({
             {onOpenAdminShield && (
               <button
                 type="button"
-                onClick={onOpenAdminShield}
-                aria-label="Admin Portal"
-                className="p-2 rounded-xl text-[#006a46] dark:text-[#6cdba6] hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                {...adminShieldHandlers}
+                aria-label="بوابة الإدارة"
+                className="p-2 rounded-xl text-[#006a46] dark:text-[#6cdba6] hover:bg-emerald-500/10 transition-colors cursor-pointer select-none"
               >
                 <Shield className="w-4 h-4" />
               </button>

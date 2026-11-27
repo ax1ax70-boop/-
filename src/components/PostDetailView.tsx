@@ -12,6 +12,7 @@ import {
   EyeOff,
   Heart,
   MessageCircle,
+  QrCode,
   Send,
   Share2,
   Sparkles,
@@ -25,8 +26,11 @@ import type {Post, SiteConfig, VisitorProfile} from '../types';
 import {useI18n} from '../utils/i18n';
 import {resolveFontFamilyCss, resolveFontSizeSpec, useReadingPrefs} from '../utils/readingPrefs';
 import {parseSearchKeywords} from '../utils/search';
+import {getPublicSiteUrl} from '../utils/storage';
+import {trackInteraction} from '../utils/telemetry';
 import {FloatingReadingBar} from './FloatingReadingBar';
 import {HighlightText} from './HighlightText';
+import {PostQrModal} from './PostQrModal';
 import {ReadingControlsBar} from './ReadingControlsBar';
 
 export function PostDetailView({
@@ -86,6 +90,7 @@ export function PostDetailView({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [paperMode, setPaperMode] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   const {prefs: readingPrefs, updatePrefs: updateReadingPrefs} = useReadingPrefs();
 
   const effectiveFontSize = useMemo(() => {
@@ -105,7 +110,7 @@ export function PostDetailView({
       ? 'bg-[#071812] text-[#e6f5ee] border-emerald-900/60'
       : rTheme === 'light'
         ? 'bg-[#fffdf8] text-[#17241e] border-[#e7dec6]'
-        : 'bg-white dark:bg-[#0d211a] text-[#0e1d25] dark:text-[#e3f3fe] border-slate-200/80 dark:border-white/10';
+        : 'bg-white dark:bg-[#223a32] text-[#0e1d25] dark:text-[#e3f3fe] border-slate-200/80 dark:border-white/10';
 
   const headingTextClass = paperMode
     ? 'text-[#23190c]'
@@ -129,7 +134,7 @@ export function PostDetailView({
       ? 'bg-[#0d241c] text-[#e6f5ee]'
       : rTheme === 'light'
         ? 'bg-[#f4efe1] text-[#1b241f]'
-        : 'bg-[#e8f6ff] dark:bg-[#112921] text-[#0e1d25] dark:text-white';
+        : 'bg-[#e8f6ff] dark:bg-[#28453b] text-[#0e1d25] dark:text-white';
 
   const togglePaperMode = () => {
     setPaperMode((prev) => {
@@ -201,18 +206,26 @@ export function PostDetailView({
   }, [chartPoints, linePath]);
 
   const handleShareText = async () => {
-    const full = `${post.title}\n\n${post.body}\n\n— ${post.author} · ${tr('تطبيق مواعظ وعبر', 'Mawaedh & Ibar')}`;
+    const postUrl = getPublicSiteUrl(`/?post=${encodeURIComponent(post.id)}`);
+    const cleanBody = post.body.replace(/\s+/g, ' ').trim();
+    const isLong = cleanBody.length > 125;
+    const snippet = isLong ? `${cleanBody.slice(0, 120).trim()}...` : cleanBody;
+    const payload = isLong
+      ? `${post.title}\n\n${snippet}\n\n📲 لتكملة الحديث أو القصة عبر الباركود أو الرابط:\n${postUrl}\n— ${post.author} · ${tr('تطبيق مواعظ وعبر', 'Mawaedh & Ibar')}`
+      : `${post.title}\n\n${post.body}\n\n🌐 ${postUrl}\n— ${post.author} · ${tr('تطبيق مواعظ وعبر', 'Mawaedh & Ibar')}`;
     if (navigator.share) {
       try {
-        await navigator.share({title: post.title, text: full});
+        await navigator.share({title: post.title, text: payload, url: postUrl});
+        trackInteraction('sermon_share', post.category);
         return;
       } catch {
         // Ignore
       }
     }
     try {
-      await navigator.clipboard.writeText(full);
-      onNotify(tr('تم نسخ نص الموعظة بالكامل للمشاركة', 'Full reflection text copied for sharing'));
+      await navigator.clipboard.writeText(payload);
+      trackInteraction('sermon_share', post.category);
+      onNotify(tr('تم نسخ المقتطف المختصر مع الرابط للمشاركة', 'Concise teaser & link copied'));
     } catch {
       onNotify(tr('تم تجهيز الموعظة للمشاركة', 'Reflection ready to share'));
     }
@@ -228,7 +241,7 @@ export function PostDetailView({
         <button
           type="button"
           onClick={onBack}
-          className="min-h-[44px] px-4 py-2 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-sm font-semibold flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+          className="min-h-[44px] px-4 py-2 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-sm font-semibold flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
         >
           <BackArrow className="w-4 h-4" />
           <span>{tr('العودة', 'Back')}</span>
@@ -256,10 +269,19 @@ export function PostDetailView({
             className={`min-w-[44px] min-h-[44px] rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center ${
               isBookmarked
                 ? 'bg-[#ffdea8] text-[#271900]'
-                : 'bg-white dark:bg-[#0d211a] text-[#3e4a42] dark:text-slate-200'
+                : 'bg-white dark:bg-[#223a32] text-[#3e4a42] dark:text-slate-200'
             }`}
           >
             <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setQrModalOpen(true)}
+            aria-label={tr('رمز QR للمشاركة', 'Post QR Code')}
+            className="min-h-[44px] px-3.5 py-2 rounded-xl border border-[#006a46]/30 bg-[#eefaf3] dark:bg-[#28453b] text-[#006a46] dark:text-[#6cdba6] hover:bg-[#daf3e6] text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors"
+          >
+            <QrCode className="w-4 h-4 shrink-0" />
+            <span>{tr('باركود QR', 'QR Code')}</span>
           </button>
           <button
             type="button"
@@ -390,6 +412,14 @@ export function PostDetailView({
               <Copy className="w-3.5 h-3.5" />
               <span>{tr(siteConfig.sadaBroadcastBtn, 'Copy Formatted')}</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setQrModalOpen(true)}
+              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-white dark:bg-[#223a32] border border-[#006a46]/25 text-[#006a46] dark:text-[#6cdba6] hover:bg-[#eefaf3] text-xs font-bold flex items-center gap-1.5 transition-colors"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>{tr('مشاركة بالباركود (QR)', 'Share QR Code')}</span>
+            </button>
             {post.youtubeUrl && (
               <a
                 href={post.youtubeUrl}
@@ -426,7 +456,7 @@ export function PostDetailView({
         {/* 7-Day Reading & Reach Trend Chart */}
         <section
           aria-label={tr('مؤشر القراءة والانتشار خلال آخر ٧ أيام', '7-day reading & reach trend')}
-          className="rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 space-y-3"
+          className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 space-y-3"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -520,7 +550,7 @@ export function PostDetailView({
       </article>
 
       {/* Real Visitor Comments Section */}
-      <section className="card-3d rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-6 shadow-sm space-y-4">
+      <section className="card-3d rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <MessageCircle className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
@@ -560,7 +590,7 @@ export function PostDetailView({
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 placeholder={tr('أضف تعليقاً أو دعوة صالحة أو فائدة...', 'Write a kind comment or reflection...')}
-                className="flex-1 min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                className="flex-1 min-h-[44px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#006a46]"
               />
               <button
                 type="submit"
@@ -613,7 +643,7 @@ export function PostDetailView({
                   className={`rounded-xl border p-3.5 space-y-2 ${
                     c.hidden
                       ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-400/40'
-                      : 'bg-[#f4faff] dark:bg-[#112921] border-slate-200/70 dark:border-white/10'
+                      : 'bg-[#f4faff] dark:bg-[#28453b] border-slate-200/70 dark:border-white/10'
                   }`}
                 >
                   {isAdmin && (
@@ -669,7 +699,7 @@ export function PostDetailView({
                         type="text"
                         value={editingCommentText}
                         onChange={(e) => setEditingCommentText(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#081712] px-3 py-1.5 text-sm"
+                        className="w-full rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-[#1b3029] px-3 py-1.5 text-sm"
                       />
                       <div className="flex items-center gap-2">
                         <button
@@ -709,6 +739,12 @@ export function PostDetailView({
         onChangeFontFamily={(fontFamily) => updateReadingPrefs({fontFamily})}
         onChangeReadingTheme={(readingTheme) => updateReadingPrefs({readingTheme})}
         contextLabel={tr('شريط التحكم لقراءة الموعظة', 'Reading Controls')}
+      />
+
+      <PostQrModal
+        post={qrModalOpen ? post : null}
+        onClose={() => setQrModalOpen(false)}
+        onNotify={onNotify}
       />
     </div>
   );

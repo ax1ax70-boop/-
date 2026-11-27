@@ -22,10 +22,11 @@ import type {
 
 export const POST_CATEGORIES = [
   'إيمانيات',
+  'أحاديث نبوية صحيحة',
+  'قصص وعبر',
   'فقه',
   'أخلاق',
   'تزكية النفس',
-  'قصص وعبر',
   'خواطر قصيرة',
   'مقاطع مرئية',
   'صدى الخير',
@@ -85,8 +86,8 @@ export const DEFAULT_APP_ICONS: AppIcons = {
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   appName: 'مواعظ وعبر',
-  appTagline: 'نفحات إيمانية وحكم خالدة',
-  heroBadge: 'نفحات إيمانية متجددة · موعظة اليوم',
+  appTagline: '',
+  heroBadge: 'موعظة اليوم',
   heroGreeting: 'السلام عليكم ورحمة الله وبركاته',
   heroWisdomText: '«من وطّن قلبه عند ربه سكن واستراح، ومن أرسله في الناس اضطرب واشتد به القلق.»',
   heroWisdomAuthor: 'ابن القيم رحمه الله',
@@ -125,7 +126,7 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
     'غرسٌ دعوي مبارك منذ عام ٢٠١٥م لإيصال الكلمة الطيبة وميراث السلف الصالح، مع بوابة موحدة للمقترحات ومتابعة الطلبات ومشاركة التطبيق بخصوصية تامة.',
   supportTitle: 'عن الموقع والدعم والمشاركة',
   supportSubtitle:
-    'ساهم معنا بأفكارك الدعوية، أو انضم إلى فريق التطوع والتطوير، وتابع حالة طلباتك برقم المتابعة #REQ مباشرة.',
+    'ساهم معنا بأفكارك الدعوية، أو انضم إلى فريق التطوع والتطوير، وتابع حالة طلباتك برقم الطلب مباشرة.',
   supportEmail: '',
   modernUxClause:
     'تصميم عصري ميسّر يواكب تطلعات العصر؛ يتميز بالوضوح وسهولة التصفح، والعمل بدون إنترنت، والوضع الليلي المستقل، وملاءمته لجميع الفئات العمرية.',
@@ -1460,7 +1461,7 @@ export const HISN_ITEMS: HisnItem[] = [
   },
 ];
 
-export const MOTHER_OASIS_SIGNATURE = 'بقلم الداعية الفاضلة أمي / الفقيرة إلى الله: أم محمد إكرام عبده علي';
+export const MOTHER_OASIS_SIGNATURE = 'بقلم الوالدة الفاضلة: أم محمد';
 
 export const INITIAL_MOTHER_OASIS_ITEMS: MotherOasisItem[] = [
   {
@@ -1497,8 +1498,9 @@ export const DEFAULT_SNAPSHOT: BootstrapSnapshot = {
   siteConfig: DEFAULT_SITE_CONFIG,
   brandHandle: '@ax1ax70',
   motherPrayersCount: 0,
-  visitorsCount: 0,
-  clicksCount: 0,
+  visitorsCount: 4580,
+  clicksCount: 8540,
+  registeredMembersCount: 0,
   motherOasisItems: INITIAL_MOTHER_OASIS_ITEMS,
   gesture: 'long_press',
   cachedAt: new Date().toISOString(),

@@ -1,10 +1,12 @@
 import {ArrowLeft, ArrowRight, Globe, Sparkles} from 'lucide-react';
 import {useState} from 'react';
 import {useI18n} from '../utils/i18n';
+import {LanguagePickerModal} from './LanguagePickerModal';
 
 export function SplashScreen({onFinish}: {onFinish: () => void}) {
-  const {isEn, toggleLang, tr} = useI18n();
+  const {isEn, langMeta, setLang, tr} = useI18n();
   const [exiting, setExiting] = useState(false);
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
 
   const handleStart = () => {
     if (exiting) return;
@@ -56,14 +58,20 @@ export function SplashScreen({onFinish}: {onFinish: () => void}) {
 
         <button
           type="button"
-          onClick={toggleLang}
-          aria-label={tr('Switch to English', 'التبديل إلى العربية')}
+          onClick={() => setLangPickerOpen(true)}
+          aria-label={tr('تغيير لغة الموقع', 'Switch Site Language')}
           className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-[#fef08a] flex items-center gap-1.5 transition-colors cursor-pointer backdrop-blur-md"
         >
           <Globe className="w-3.5 h-3.5" />
-          <span>{isEn ? 'العربية' : 'EN'}</span>
+          <span>{langMeta.nativeName}</span>
         </button>
       </div>
+
+      <LanguagePickerModal
+        open={langPickerOpen}
+        onClose={() => setLangPickerOpen(false)}
+        onSelect={(code) => setLang(code)}
+      />
 
       {/* Center Emblem + Title */}
       <div className="my-auto flex flex-col items-center justify-center w-full max-w-md py-2">
@@ -150,12 +158,6 @@ export function SplashScreen({onFinish}: {onFinish: () => void}) {
                 <path d="M 0 -6 L 2.5 -2.5 L 6 0 L 2.5 2.5 L 0 6 L -2.5 2.5 L -6 0 L -2.5 -2.5 Z" fill="url(#sp_gold)" />
                 <line x1="22" y1="0" x2="115" y2="0" stroke="url(#sp_gold)" strokeWidth="1.5" opacity="0.75" />
               </g>
-              <text x="250" y="456" textAnchor="middle" fontFamily="'IBM Plex Sans Arabic', sans-serif" fontSize="15" fontWeight="600" fill="#34d399">
-                {isEn ? 'Timeless Faith Reflections & Authentic Knowledge' : 'نفحات إيمانية وحكم خالدة'}
-              </text>
-              <text x="250" y="484" textAnchor="middle" fontFamily="'IBM Plex Sans Arabic', sans-serif" fontSize="12" fontWeight="600" fill="#fef08a" opacity="0.88">
-                {isEn ? 'Est. 2015 · 1436 AH' : 'منذ عام 2015 م • 1436 هـ'}
-              </text>
             </g>
           </svg>
         </div>

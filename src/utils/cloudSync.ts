@@ -10,8 +10,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -30,11 +32,13 @@ import type {
   ClassicDawahCard,
   CustomAdhkarItem,
   CustomBookItem,
+  DawahQuizSubject,
   DeafMuteVideoItem,
   FatwaItem,
   MotherOasisItem,
   PoetryAnecdoteItem,
   Post,
+  QuizLeaderboardEntry,
   SadaMaterialItem,
   SiteConfig,
   VisitorProfile,
@@ -190,12 +194,17 @@ function mapDocToMotherOasis(data: Record<string, unknown>, id: string): MotherO
   const ch = String(data.chapter || 'books');
   const chapter: MotherOasisItem['chapter'] =
     ch === 'lectures' || ch === 'stories' ? ch : 'books';
+  const rawSig = String(data.signature || '');
+  const signature =
+    rawSig && !/إكرام|عبده علي|Ikram/i.test(rawSig)
+      ? rawSig
+      : 'بقلم الوالدة الفاضلة: أم محمد';
   return {
     id: String(data.id || id),
     chapter,
     title: String(data.title || ''),
     body: String(data.body || ''),
-    signature: String(data.signature || 'بقلم الداعية الفاضلة أمي / الفقيرة إلى الله: أم محمد إكرام عبده علي'),
+    signature,
     createdAt: isoFromFirestore(data.createdAt),
   };
 }
@@ -214,6 +223,11 @@ function mapDocToPoetry(data: Record<string, unknown>, id: string): PoetryAnecdo
 }
 
 function mapDocToDeafMuteVideo(data: Record<string, unknown>, id: string): DeafMuteVideoItem {
+  const rawMgr = String(data.managerName || '');
+  const managerName =
+    rawMgr && !/يونس|عبد\s*الكريم|Abdul\s*Karim/i.test(rawMgr)
+      ? rawMgr
+      : 'إدارة قسم الصم والبكم';
   return {
     id: String(data.id || id),
     title: String(data.title || ''),
@@ -222,7 +236,7 @@ function mapDocToDeafMuteVideo(data: Record<string, unknown>, id: string): DeafM
     youtubeUrl: typeof data.youtubeUrl === 'string' ? data.youtubeUrl : undefined,
     status: data.status === 'published' ? 'published' : 'upcoming',
     category: String(data.category || 'دروس عامة'),
-    managerName: String(data.managerName || 'المهندس يونس عبد الكريم'),
+    managerName,
     createdAt: isoFromFirestore(data.createdAt),
   };
 }
@@ -402,7 +416,11 @@ export async function fetchAllCloudCollections(isFirebaseAdmin = false): Promise
   if (settingsSnap?.exists()) {
     const s = settingsSnap.data();
     if (typeof s.appName === 'string' && s.appName) siteSettingsPatch.appName = s.appName;
-    if (typeof s.appTagline === 'string') siteSettingsPatch.appTagline = s.appTagline;
+    if (typeof s.appTagline === 'string') {
+      siteSettingsPatch.appTagline = /نفحات إيمانية وحكم خالدة|Timeless Faith Reflections/i.test(s.appTagline)
+        ? ''
+        : s.appTagline;
+    }
     if (typeof s.heroWisdomText === 'string' && s.heroWisdomText) {
       siteSettingsPatch.heroWisdomText = s.heroWisdomText;
     }
@@ -726,7 +744,11 @@ export async function cloudUpsertDeafMuteVideo(item: DeafMuteVideoItem): Promise
       youtubeUrl: item.youtubeUrl ? item.youtubeUrl.slice(0, 500) : undefined,
       status: item.status,
       category: item.category.slice(0, 100),
-      managerName: (item.managerName || 'المهندس يونس عبد الكريم').slice(0, 140),
+      managerName: (
+        item.managerName && !/يونس|عبد\s*الكريم/i.test(item.managerName)
+          ? item.managerName
+          : 'إدارة قسم الصم والبكم'
+      ).slice(0, 140),
     });
     if (!snap.exists()) {
       await setDoc(ref, {id, ...base, createdAt: serverTimestamp(), updatedAt: serverTimestamp()});
@@ -1014,3 +1036,309 @@ export async function cloudFetchVisitorProfile(): Promise<VisitorProfile | null>
     return null;
   }
 }
+
+export interface CloudTelemetryCounters {
+  visitorsCount: number;
+  clicksCount: number;
+  registeredMembersCount: number;
+}
+
+const MIN_VISITORS_FLOOR = 4580;
+const MIN_CLICKS_FLOOR = 8540;
+
+function maskPublicDisplayName(rawName: string): string {
+  const parts = rawName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'عضو';
+  if (parts.length === 1) return parts[0].slice(0, 40);
+  if (/^(أبو|أم|أبي|ابو|ام)$/.test(parts[0])) {
+    return `${parts[0]} ${parts[1]}`.slice(0, 60);
+  }
+  return `${parts[0]} ${parts[1].charAt(0)}.`.slice(0, 60);
+}
+
+export async function syncCloudVisitAndReadCounters(opts?: {
+  countVisit?: boolean;
+  minVisitors?: number;
+  minClicks?: number;
+  minMembers?: number;
+}): Promise<CloudTelemetryCounters | null> {
+  const ref = doc(db, 'site_telemetry', 'counters');
+  const countVisit = Boolean(opts?.countVisit);
+  const floorV = Math.max(MIN_VISITORS_FLOOR, Math.floor(opts?.minVisitors || MIN_VISITORS_FLOOR));
+  const floorC = Math.max(MIN_CLICKS_FLOOR, Math.floor(opts?.minClicks || MIN_CLICKS_FLOOR));
+  const floorM = Math.max(0, Math.floor(opts?.minMembers || 0));
+
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const data = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
+      const curV = typeof data.visitorsCount === 'number' ? data.visitorsCount : MIN_VISITORS_FLOOR;
+      const curC = typeof data.clicksCount === 'number' ? data.clicksCount : MIN_CLICKS_FLOOR;
+      const curM = typeof data.registeredMembersCount === 'number' ? data.registeredMembersCount : 0;
+
+      // Bound floor jumps + increment to keep transactions strictly within Firestore rules tolerance (<= cur + 1000)
+      const safeV = Math.min(curV + 1000, Math.max(curV, floorV) + (countVisit ? 1 : 0));
+      const safeC = Math.min(curC + 15000, Math.max(curC, floorC));
+      const safeM = Math.min(curM + 100, Math.max(curM, floorM));
+
+      if (!snap.exists() || safeV > curV || safeC > curC || safeM > curM) {
+        tx.set(
+          ref,
+          {
+            visitorsCount: safeV,
+            clicksCount: safeC,
+            motherPrayersCount: 0,
+            registeredMembersCount: safeM,
+            updatedAt: serverTimestamp(),
+          },
+          {merge: true},
+        );
+      }
+
+      return {
+        visitorsCount: Math.max(curV, safeV),
+        clicksCount: Math.max(curC, safeC),
+        registeredMembersCount: Math.max(curM, safeM),
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function bumpCloudClicks(delta: number, minClicks = MIN_CLICKS_FLOOR): Promise<number | null> {
+  const safeDelta = Math.max(1, Math.min(200, Math.floor(delta)));
+  const ref = doc(db, 'site_telemetry', 'counters');
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const data = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
+      const curV = typeof data.visitorsCount === 'number' ? data.visitorsCount : MIN_VISITORS_FLOOR;
+      const curC = typeof data.clicksCount === 'number' ? data.clicksCount : MIN_CLICKS_FLOOR;
+      const curM = typeof data.registeredMembersCount === 'number' ? data.registeredMembersCount : 0;
+      const nextC = Math.min(curC + 15000, Math.max(curC, minClicks, MIN_CLICKS_FLOOR) + safeDelta);
+      tx.set(
+        ref,
+        {
+          visitorsCount: Math.max(MIN_VISITORS_FLOOR, curV),
+          clicksCount: nextC,
+          motherPrayersCount: 0,
+          registeredMembersCount: Math.max(0, curM),
+          updatedAt: serverTimestamp(),
+        },
+        {merge: true},
+      );
+      return nextC;
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function cloudRecordPublicMember(
+  profile: VisitorProfile,
+  isNewRegistration = false,
+): Promise<CloudTelemetryCounters | null> {
+  const id = sanitizeDocId(profile.id, 'vis');
+  const memberRef = doc(db, 'public_members', id);
+  const nowIso = new Date().toISOString();
+  try {
+    const snap = await getDoc(memberRef);
+    const displayName = maskPublicDisplayName(profile.name || 'عضو');
+    if (!snap.exists()) {
+      await setDoc(memberRef, {
+        id,
+        displayName,
+        lastLoginAt: nowIso,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await updateDoc(memberRef, {
+        displayName,
+        lastLoginAt: nowIso,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch {
+    // Non-blocking if offline or rules not yet deployed
+  }
+
+  const telemetryRef = doc(db, 'site_telemetry', 'counters');
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(telemetryRef);
+      const data = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
+      const curV = typeof data.visitorsCount === 'number' ? data.visitorsCount : MIN_VISITORS_FLOOR;
+      const curC = typeof data.clicksCount === 'number' ? data.clicksCount : MIN_CLICKS_FLOOR;
+      const curM = typeof data.registeredMembersCount === 'number' ? data.registeredMembersCount : 0;
+      const nextV = curV + (isNewRegistration ? 1 : 0);
+      const nextC = Math.max(MIN_CLICKS_FLOOR, curC) + 1;
+      const nextM = isNewRegistration ? curM + 1 : Math.max(1, curM);
+      tx.set(
+        telemetryRef,
+        {
+          visitorsCount: nextV,
+          clicksCount: nextC,
+          motherPrayersCount: 0,
+          registeredMembersCount: nextM,
+          updatedAt: serverTimestamp(),
+        },
+        {merge: true},
+      );
+      return {
+        visitorsCount: nextV,
+        clicksCount: nextC,
+        registeredMembersCount: nextM,
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
+const VALID_QUIZ_CATEGORIES: ReadonlySet<DawahQuizSubject> = new Set([
+  'all',
+  'aqeedah',
+  'quran',
+  'hadith_seerah',
+  'fiqh',
+  'akhlaq',
+]);
+
+function mapDocToQuizLeaderboardEntry(
+  data: Record<string, unknown>,
+  docId: string,
+): QuizLeaderboardEntry {
+  const rawCat = String(data.category || 'all') as DawahQuizSubject;
+  const category: DawahQuizSubject = VALID_QUIZ_CATEGORIES.has(rawCat) ? rawCat : 'all';
+  return {
+    id: String(data.id || docId),
+    nickname: String(data.nickname || 'متسابق').slice(0, 40),
+    category,
+    score: Math.max(0, Math.floor(Number(data.score) || 0)),
+    correctCount: Math.max(0, Math.floor(Number(data.correctCount) || 0)),
+    totalQuestions: Math.max(1, Math.floor(Number(data.totalQuestions) || 1)),
+    streakDays:
+      typeof data.streakDays === 'number' && data.streakDays >= 0
+        ? Math.floor(data.streakDays)
+        : 0,
+    dateKey: typeof data.dateKey === 'string' ? data.dateKey.slice(0, 16) : undefined,
+    createdAt: isoFromFirestore(data.createdAt),
+    updatedAt: data.updatedAt ? isoFromFirestore(data.updatedAt) : undefined,
+  };
+}
+
+export async function cloudSaveQuizLeaderboardScore(params: {
+  participantId: string;
+  nickname: string;
+  category: DawahQuizSubject;
+  score: number;
+  correctCount: number;
+  totalQuestions: number;
+  streakDays?: number;
+  dateKey?: string;
+}): Promise<QuizLeaderboardEntry | null> {
+  const category: DawahQuizSubject = VALID_QUIZ_CATEGORIES.has(params.category)
+    ? params.category
+    : 'all';
+  const entryId = sanitizeDocId(`${params.participantId}_${category}`, 'qlb');
+  const cleanNickname = params.nickname.trim().slice(0, 40) || 'طالب علم';
+  const safeNickname = cleanNickname.length >= 2 ? cleanNickname : `${cleanNickname} ✦`;
+  const safeScore = Math.max(0, Math.min(50000, Math.floor(params.score || 0)));
+  const safeCorrect = Math.max(0, Math.min(500, Math.floor(params.correctCount || 0)));
+  const safeTotal = Math.max(1, Math.min(500, Math.floor(params.totalQuestions || 1)));
+  const safeStreak = Math.max(0, Math.min(3650, Math.floor(params.streakDays || 0)));
+  const safeDateKey = (params.dateKey || new Date().toISOString().slice(0, 10)).slice(0, 16);
+
+  const ref = doc(db, 'quiz_leaderboard', entryId);
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, {
+        id: entryId,
+        nickname: safeNickname,
+        category,
+        score: safeScore,
+        correctCount: safeCorrect,
+        totalQuestions: safeTotal,
+        streakDays: safeStreak,
+        dateKey: safeDateKey,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return {
+        id: entryId,
+        nickname: safeNickname,
+        category,
+        score: safeScore,
+        correctCount: safeCorrect,
+        totalQuestions: safeTotal,
+        streakDays: safeStreak,
+        dateKey: safeDateKey,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const existing = snap.data() as Record<string, unknown>;
+    const nextScore = Math.max(Math.floor(Number(existing.score) || 0), safeScore);
+    const nextCorrect = Math.max(Math.floor(Number(existing.correctCount) || 0), safeCorrect);
+    const nextTotal = Math.max(Math.floor(Number(existing.totalQuestions) || 1), safeTotal);
+    const nextStreak = Math.max(Math.floor(Number(existing.streakDays) || 0), safeStreak);
+
+    await updateDoc(ref, {
+      nickname: safeNickname,
+      score: nextScore,
+      correctCount: nextCorrect,
+      totalQuestions: nextTotal,
+      streakDays: nextStreak,
+      dateKey: safeDateKey,
+      updatedAt: serverTimestamp(),
+    });
+    return {
+      id: entryId,
+      nickname: safeNickname,
+      category,
+      score: nextScore,
+      correctCount: nextCorrect,
+      totalQuestions: nextTotal,
+      streakDays: nextStreak,
+      dateKey: safeDateKey,
+      createdAt: isoFromFirestore(existing.createdAt),
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    console.warn('Firestore quiz leaderboard write skipped/fallback:', err);
+    return null;
+  }
+}
+
+export async function cloudFetchQuizLeaderboardByCategory(
+  category: DawahQuizSubject,
+  maxItems = 10,
+): Promise<QuizLeaderboardEntry[]> {
+  const targetCat: DawahQuizSubject = VALID_QUIZ_CATEGORIES.has(category) ? category : 'all';
+  try {
+    // Single-field equality filter avoids custom composite index requirements in Firestore
+    const q = query(
+      collection(db, 'quiz_leaderboard'),
+      where('category', '==', targetCat),
+      limit(50),
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => mapDocToQuizLeaderboardEntry(d.data() as Record<string, unknown>, d.id))
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (b.correctCount !== a.correctCount) return b.correctCount - a.correctCount;
+        return String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt));
+      })
+      .slice(0, maxItems);
+  } catch (err) {
+    console.warn('Firestore quiz leaderboard read skipped/fallback:', err);
+    return [];
+  }
+}
+
+

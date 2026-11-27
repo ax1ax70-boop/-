@@ -10,16 +10,23 @@ import {
   INITIAL_POSTS,
   INITIAL_SOCIAL_LINKS,
 } from '../data/seed';
+import {DAWAH_CARDS_RESET_EPOCH, isConciseClassicCard} from '../data/dawahCards';
 import type {BootstrapSnapshot} from '../types';
 
 const SNAPSHOT_KEY = 'mawaedh_snapshot_v4';
+const DAWAH_CARDS_RESET_FLAG_KEY = 'mawaedh_dawah_cards_reset_v4';
 
 export function loadSnapshot(): BootstrapSnapshot {
   if (typeof window === 'undefined') return DEFAULT_SNAPSHOT;
   try {
+    let hasDawahResetFlag = false;
     try {
       window.localStorage.removeItem('mawaedh_snapshot_v2');
       window.localStorage.removeItem('mawaedh_snapshot_v3');
+      hasDawahResetFlag = window.localStorage.getItem(DAWAH_CARDS_RESET_FLAG_KEY) === '1';
+      if (!hasDawahResetFlag) {
+        window.localStorage.setItem(DAWAH_CARDS_RESET_FLAG_KEY, '1');
+      }
     } catch {
       // ignore storage quota/access issues
     }
@@ -39,15 +46,30 @@ export function loadSnapshot(): BootstrapSnapshot {
     const motherOasisItems = appendOnlyMergeById(
       parsed.motherOasisItems,
       INITIAL_MOTHER_OASIS_ITEMS,
-    );
+    ).map((it) => ({
+      ...it,
+      signature:
+        it.signature && !/إكرام|عبده علي/.test(it.signature)
+          ? it.signature
+          : 'بقلم الوالدة الفاضلة: أم محمد',
+    }));
     const visitorReviews = appendOnlyMergeById(
       parsed.visitorReviews,
       APPROVED_DATASETS.visitorReviews,
-    );
+    ).map((rev) => ({
+      ...rev,
+      name: rev.name === 'سليمان المكي' ? 'مستفيد من البطاقات' : rev.name,
+    }));
     const deafMuteVideos = appendOnlyMergeById(
       parsed.deafMuteVideos,
       INITIAL_DEAF_MUTE_VIDEOS,
-    );
+    ).map((vid) => ({
+      ...vid,
+      managerName:
+        vid.managerName && !/يونس|عبد\s*الكريم/.test(vid.managerName)
+          ? vid.managerName
+          : 'إدارة قسم الصم والبكم',
+    }));
 
     const socialLinks = (() => {
       if (!Array.isArray(parsed.socialLinks) || parsed.socialLinks.length === 0) {
@@ -124,17 +146,32 @@ export function loadSnapshot(): BootstrapSnapshot {
         typeof parsed.visitorsCount === 'number'
           ? Math.max(4580, parsed.visitorsCount)
           : Math.max(4580, DEFAULT_SNAPSHOT.visitorsCount),
-      clicksCount: typeof parsed.clicksCount === 'number' ? parsed.clicksCount : DEFAULT_SNAPSHOT.clicksCount,
+      clicksCount:
+        typeof parsed.clicksCount === 'number'
+          ? Math.max(8540, parsed.clicksCount)
+          : Math.max(8540, DEFAULT_SNAPSHOT.clicksCount),
+      registeredMembersCount:
+        typeof parsed.registeredMembersCount === 'number'
+          ? Math.max(0, parsed.registeredMembersCount)
+          : 0,
       nafahatMeta: parsed.nafahatMeta,
+      dawahCardsMeta: hasDawahResetFlag ? parsed.dawahCardsMeta : undefined,
       motherOasisItems,
       visitorReviews,
       deafMuteVideos,
       customAdhkar: Array.isArray(parsed.customAdhkar) ? parsed.customAdhkar : [],
       customBooks: Array.isArray(parsed.customBooks) ? parsed.customBooks : [],
       sadaMaterials: Array.isArray(parsed.sadaMaterials) ? parsed.sadaMaterials : [],
-      aiDawahCards: Array.isArray(parsed.aiDawahCards) ? parsed.aiDawahCards : [],
+      aiDawahCards:
+        hasDawahResetFlag && Array.isArray(parsed.aiDawahCards)
+          ? parsed.aiDawahCards.filter(
+              (c) => isConciseClassicCard(c) && (!c.createdAt || c.createdAt >= DAWAH_CARDS_RESET_EPOCH),
+            )
+          : [],
       cardEngagement:
         parsed.cardEngagement && typeof parsed.cardEngagement === 'object' ? parsed.cardEngagement : {},
+      sectionStats:
+        parsed.sectionStats && typeof parsed.sectionStats === 'object' ? parsed.sectionStats : {},
       gesture: parsed.gesture === 'multi_tap' ? 'multi_tap' : 'long_press',
       cachedAt: typeof parsed.cachedAt === 'string' ? parsed.cachedAt : DEFAULT_SNAPSHOT.cachedAt,
     };
@@ -142,6 +179,8 @@ export function loadSnapshot(): BootstrapSnapshot {
     return {
       ...DEFAULT_SNAPSHOT,
       visitorsCount: Math.max(4580, DEFAULT_SNAPSHOT.visitorsCount),
+      clicksCount: Math.max(8540, DEFAULT_SNAPSHOT.clicksCount),
+      registeredMembersCount: 0,
       deafMuteVideos: INITIAL_DEAF_MUTE_VIDEOS,
       customAdhkar: [],
       customBooks: [],
@@ -161,14 +200,22 @@ export function saveSnapshot(snapshot: BootstrapSnapshot): void {
   }
 }
 
-export function getPublicSiteUrl(pathSuffix = '/?tab=home'): string {
+export const PUBLIC_PROJECT_URL = 'https://ax1ax71.ai.studio';
+
+export function getPublicSiteUrl(pathSuffix = '/'): string {
   const normalized = pathSuffix.startsWith('/') ? pathSuffix : `/${pathSuffix}`;
   if (typeof window === 'undefined') {
-    return `https://ax1ax70.ai.studio${normalized}`;
+    return `${PUBLIC_PROJECT_URL}${normalized}`;
   }
   const host = window.location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('ais-dev-')) {
-    return `https://ax1ax70.ai.studio${normalized}`;
+  if (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.startsWith('ais-dev-') ||
+    host.startsWith('ais-pre-') ||
+    host.endsWith('.run.app')
+  ) {
+    return `${PUBLIC_PROJECT_URL}${normalized}`;
   }
   return `${window.location.origin}${normalized}`;
 }

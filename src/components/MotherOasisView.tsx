@@ -1,17 +1,31 @@
-import {BookMarked, BookOpen, Clock, Feather, FileText, Heart, Sparkles} from 'lucide-react';
-import {useMemo, useState} from 'react';
+import {
+  BookMarked,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Feather,
+  FileText,
+  Heart,
+  QrCode,
+  Sparkles,
+} from 'lucide-react';
+import {useEffect, useMemo, useState} from 'react';
 import {MOTHER_OASIS_SIGNATURE} from '../data/seed';
-import type {MotherOasisChapter, MotherOasisItem, NavTab} from '../types';
+import type {MotherOasisChapter, MotherOasisItem, NavTab, Post} from '../types';
 import {useI18n} from '../utils/i18n';
 import {resolveFontFamilyCss, resolveFontSizeSpec, useReadingPrefs} from '../utils/readingPrefs';
+import {getPublicSiteUrl} from '../utils/storage';
+import {BrandCircularMark} from './ClassicCardFooter';
 import {ComingSoonState} from './ComingSoonState';
+import {InlineQrImg} from './InlineQrImg';
 
 const MOTHER_CHAPTERS: Array<{
   id: 'all' | MotherOasisChapter;
   label: string;
   desc: string;
 }> = [
-  {id: 'all', label: 'جميع الأبواب', desc: 'عرض كافة المؤلفات والمحاضرات المفرغة والقصص'},
+  {id: 'all', label: 'جميع الأبواب', desc: 'عرض كافة المؤلفات والمحاضرات المفرغة وقصص أم محمد'},
   {
     id: 'books',
     label: 'باب المؤلفات والكتب الدعوية والتربوية',
@@ -24,32 +38,52 @@ const MOTHER_CHAPTERS: Array<{
   },
   {
     id: 'stories',
-    label: 'باب «قصص وعبر من واقع الحياة»',
-    desc: 'مواقف وعبر تربوية صادقة من واقع الحياة',
+    label: 'قصص أم محمد (قصص وعبر)',
+    desc: 'مواقف وعبر تربوية صادقة ومختارة من واقع الحياة',
   },
 ];
 
+function buildTeaserExcerpt(text: string, maxLen = 320): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (clean.length <= maxLen) return clean;
+  const slice = clean.slice(0, maxLen);
+  const lastSpace = slice.lastIndexOf(' ');
+  return `${(lastSpace > 120 ? slice.slice(0, lastSpace) : slice).trim()}...`;
+}
+
 export function MotherOasisView({
   items,
-  motherPrayersCount,
-  hasPrayedForMother,
-  onAmenMother,
   onNavigate,
+  onShareCard,
   isAdmin = false,
   onAdminQuickAdd,
+  highlightedStoryId,
 }: {
   items: MotherOasisItem[];
-  motherPrayersCount: number;
-  hasPrayedForMother: boolean;
-  onAmenMother: () => void;
+  motherPrayersCount?: number;
+  hasPrayedForMother?: boolean;
+  onAmenMother?: () => void;
   onNavigate?: (tab: NavTab) => void;
+  onShareCard?: (post: Post) => void;
   isAdmin?: boolean;
   onAdminQuickAdd?: () => void;
+  highlightedStoryId?: string | null;
 }) {
   const {formatNumber} = useI18n();
   const {prefs} = useReadingPrefs();
   const fontSpec = resolveFontSizeSpec(prefs.fontSize);
   const [chapter, setChapter] = useState<'all' | MotherOasisChapter>('all');
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!highlightedStoryId) return;
+    setExpandedIds((prev) => ({...prev, [highlightedStoryId]: true}));
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`mother-story-${highlightedStoryId}`);
+      el?.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [highlightedStoryId]);
 
   const safeItems = useMemo(
     () => (Array.isArray(items) ? items.filter((it) => Boolean(it && typeof it === 'object')) : []),
@@ -78,12 +112,16 @@ export function MotherOasisView({
   const chapterMeta = (ch: MotherOasisChapter) => {
     if (ch === 'books') return {label: 'المؤلفات والكتب الدعوية والتربوية', Icon: BookOpen};
     if (ch === 'lectures') return {label: 'المحاضرات والدروس المفرغة', Icon: FileText};
-    return {label: 'قصص وعبر من واقع الحياة', Icon: BookMarked};
+    return {label: 'قصص أم محمد · قصص وعبر', Icon: BookMarked};
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => ({...prev, [id]: !prev[id]}));
   };
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Quiet Warm Introduction Card */}
+      {/* Quiet Warm Introduction Card (Privacy-Safe: Kunya Only) */}
       <section className="rounded-3xl border border-amber-500/30 bg-gradient-to-br from-[#fffaf2] via-[#fdfbf7] to-[#f4f7f5] dark:from-[#1b1710] dark:via-[#141916] dark:to-[#0c211a] p-6 sm:p-8 shadow-sm space-y-5">
         <div className="space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -93,25 +131,24 @@ export function MotherOasisView({
             </p>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-100/95 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 text-xs font-extrabold border border-amber-500/30">
               <Clock className="w-3.5 h-3.5" />
-              <span>قريباً بإذن الله · تنزيل متتابع</span>
+              <span>تحديث مستمر بالذكاء الاصطناعي ويدوياً</span>
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0e1d25] dark:text-white leading-snug">
-            واحة الداعية الفاضلة أمي: أم محمد إكرام عبده علي
+            واحة وقصص الوالدة: أم محمد
           </h1>
           <p className="text-sm sm:text-base text-[#3e4a42] dark:text-slate-300 max-w-3xl leading-relaxed">
-            صفحة مخصصة هادئة ودافئة تجمع بفضل الله ما تيسّر من كتب ورسائل ومواعظ مفرغة وقصص وعبر تربوية بقلم الداعية الفاضلة أم محمد إكرام عبده علي حفظها الله، لتكون علماً نافعاً وأثراً طيباً باقياً.
+            صفحة مخصصة هادئة ودافئة تجمع بفضل الله ما تيسّر من كتب ورسائل ومواعظ مفرغة وقصص وعبر تربوية بقلم الوالدة الفاضلة أم محمد حفظها الله، لتكون علماً نافعاً وأثراً طيباً باقياً.
           </p>
         </div>
 
-        {/* Calm & Encouraging Coming-Soon Progress Banner */}
-        <div className="rounded-2xl bg-white/85 dark:bg-[#0c1d17]/90 border border-amber-500/30 p-4 sm:p-5 space-y-2">
+        <div className="rounded-2xl bg-white/85 dark:bg-[#223a32]/90 border border-amber-500/30 p-4 sm:p-5 space-y-2">
           <div className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-[#7c5800] dark:text-[#ffdea8]">
-            <Clock className="w-4 h-4 shrink-0" />
-            <span>قريباً جداً بإذن الله · العمل جارٍ على تطوير المحتوى</span>
+            <QrCode className="w-4 h-4 shrink-0" />
+            <span>قصص أم محمد مزودة بباركود ذكي مباشر لقراءة القصة كاملة</span>
           </div>
           <p className="text-xs sm:text-sm text-[#3e4a42] dark:text-slate-300 leading-relaxed">
-            سيتم تنزيل القصص والمحاضرات والدروس والرسائل التربوية تباعاً في أبواب هذه الواحة المباركة قريباً جداً، والعمل جارٍ حالياً على تفريغ المواد وتنقيحها وتنسيقها؛ وندعو زوارنا الكرام إلى التحلي بالصبر والترقب، سائلين الله أن يكتب القبول والأجر.
+            تظهر بجانب كل قصة فقرة تشويقية مختصرة مع رمز الاستجابة السريعة (QR) الخاص بها لفتح باقي القصة ومشاركتها بسهولة تامة مع الحفاظ على خصوصية الكنية المباركة فقط.
           </p>
           <p className="text-xs font-extrabold text-amber-800 dark:text-amber-300 flex items-center gap-1.5 pt-1">
             <Feather className="w-3.5 h-3.5 shrink-0" />
@@ -119,25 +156,7 @@ export function MotherOasisView({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-amber-500/20">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              onClick={onAmenMother}
-              className={`min-h-[42px] px-4 py-2 rounded-2xl font-extrabold text-xs sm:text-sm flex items-center gap-2 transition-colors ${
-                hasPrayedForMother
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-[#006a46] hover:bg-[#005235] text-white'
-              }`}
-            >
-              <Heart className="w-4 h-4 fill-current" />
-              <span>اللهم احفظها وبارك في عمرها (آمين)</span>
-            </button>
-            <span className="text-xs sm:text-sm font-bold text-[#6e7a71] dark:text-slate-300 tabular-nums">
-              أمنَ {formatNumber(motherPrayersCount)} زائر
-            </span>
-          </div>
-
+        <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-amber-500/20">
           <div className="flex flex-wrap items-center gap-2">
             {isAdmin && onAdminQuickAdd && (
               <button
@@ -145,7 +164,7 @@ export function MotherOasisView({
                 onClick={onAdminQuickAdd}
                 className="min-h-[40px] px-4 py-2 rounded-xl bg-[#006a46] hover:bg-[#005235] text-white text-xs font-extrabold transition-colors"
               >
-                + إضافة مادة لواحة أمي
+                + إضافة مادة لواحة الوالدة
               </button>
             )}
             {onNavigate && (
@@ -175,7 +194,7 @@ export function MotherOasisView({
               className={`min-h-[42px] px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap shrink-0 flex items-center gap-2 transition-colors ${
                 active
                   ? 'bg-[#006a46] text-white shadow-sm'
-                  : 'bg-white dark:bg-[#0c211a] border border-slate-200/80 dark:border-white/10 text-[#3e4a42] dark:text-slate-300 hover:border-[#006a46]/40'
+                  : 'bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 text-[#3e4a42] dark:text-slate-300 hover:border-[#006a46]/40'
               }`}
             >
               <span>{ch.label}</span>
@@ -201,7 +220,7 @@ export function MotherOasisView({
         })}
       </div>
 
-      {/* Articles / Works Feed */}
+      {/* Articles / Works / Stories Feed */}
       {filteredItems.length === 0 ? (
         <ComingSoonState
           badgeText="قريباً بإذن الله"
@@ -219,10 +238,23 @@ export function MotherOasisView({
             const meta = chapterMeta(item.chapter);
             const Icon = meta.Icon;
             const dateText = formatCreatedAt(item.createdAt);
+            const storyQrUrl = getPublicSiteUrl(`/?tab=mother-oasis&story=${encodeURIComponent(item.id)}`);
+            const isStory = item.chapter === 'stories' || item.body.trim().length > 340;
+            const isExpanded = Boolean(expandedIds[item.id] || highlightedStoryId === item.id);
+            const displaySignature =
+              item.signature && !/إكرام|عبده علي/.test(item.signature)
+                ? item.signature
+                : MOTHER_OASIS_SIGNATURE;
+
             return (
               <article
+                id={`mother-story-${item.id}`}
                 key={item.id}
-                className="rounded-3xl border border-amber-500/20 bg-white dark:bg-[#0c211a] p-5 sm:p-7 shadow-xs space-y-4"
+                className={`rounded-3xl border bg-white dark:bg-[#223a32] p-5 sm:p-7 shadow-xs space-y-4 ${
+                  highlightedStoryId === item.id
+                    ? 'border-[#006a46] ring-2 ring-[#006a46]/25'
+                    : 'border-amber-500/20'
+                }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="inline-flex items-center gap-1.5 font-extrabold text-[#006a46] dark:text-[#6cdba6]">
@@ -240,17 +272,139 @@ export function MotherOasisView({
                   {item.title}
                 </h2>
 
-                <p
-                  dir="rtl"
-                  style={{fontFamily: resolveFontFamilyCss(prefs.fontFamily)}}
-                  className={`${fontSpec.bodyClass} text-[#1d2a22] dark:text-slate-200 whitespace-pre-line`}
-                >
-                  {item.body}
-                </p>
+                {isStory && !isExpanded ? (
+                  <div className="rounded-2xl bg-[#F8F9FA] dark:bg-[#1b3029] border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex-1 space-y-3">
+                      <p
+                        dir="rtl"
+                        style={{fontFamily: resolveFontFamilyCss(prefs.fontFamily)}}
+                        className={`${fontSpec.bodyClass} text-[#1d2a22] dark:text-slate-200 leading-relaxed`}
+                      >
+                        {buildTeaserExcerpt(item.body, 320)}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(item.id)}
+                          className="min-h-[40px] px-4 py-2 rounded-xl bg-[#006a46] hover:bg-[#005235] text-white text-xs sm:text-sm font-extrabold inline-flex items-center gap-1.5 transition-colors"
+                        >
+                          <span>اقرأ باقي القصة كاملة</span>
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                        {onShareCard && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onShareCard({
+                                id: `mother_${item.id}`,
+                                title: item.title,
+                                excerpt: buildTeaserExcerpt(item.body, 320),
+                                body: item.body,
+                                author: displaySignature,
+                                sourceLabel: meta.label,
+                                category: 'قصص أم محمد',
+                                mediaType: 'quote',
+                                cardTheme: 'emerald',
+                                likes: 0,
+                                commentsCount: 0,
+                                publishedAtLabel: dateText || 'واحة أم محمد',
+                                createdAt: item.createdAt,
+                                shareUrl: storyQrUrl,
+                              })
+                            }
+                            className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#fffbf2] dark:bg-white/10 border border-[#f2be5e]/45 text-[#7c5800] dark:text-[#f2be5e] text-xs font-extrabold inline-flex items-center gap-1.5"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>مشاركة كبطاقة + باركود</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
-                <div className="pt-3 border-t border-amber-500/15 flex items-center gap-2 text-xs sm:text-sm font-extrabold text-amber-800 dark:text-amber-300">
-                  <Feather className="w-4 h-4 shrink-0" />
-                  <span>{item.signature || MOTHER_OASIS_SIGNATURE}</span>
+                    {/* Story QR Side Card beside Teaser */}
+                    <div
+                      style={{backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0'}}
+                      className="rounded-2xl p-3 flex flex-col items-center gap-2 shrink-0 self-center sm:self-auto"
+                    >
+                      <InlineQrImg
+                        url={storyQrUrl}
+                        size={200}
+                        alt={`باركود ${item.title}`}
+                        className="w-24 h-24 rounded-lg p-1 bg-white border border-[#E2E8F0]"
+                      />
+                      <span style={{color: '#006a46'}} className="text-[10px] font-extrabold text-center leading-tight">
+                        امسح لفتح باقي القصة
+                      </span>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <BrandCircularMark size="sm" />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p
+                      dir="rtl"
+                      style={{fontFamily: resolveFontFamilyCss(prefs.fontFamily)}}
+                      className={`${fontSpec.bodyClass} text-[#1d2a22] dark:text-slate-200 whitespace-pre-line`}
+                    >
+                      {item.body}
+                    </p>
+                    {isStory && (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#F8F9FA] dark:bg-[#1b3029] border border-slate-200/80 dark:border-white/10 p-3.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(item.id)}
+                          className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-white dark:bg-white/10 border border-slate-200 dark:border-white/10 text-xs font-bold text-[#0e1d25] dark:text-white inline-flex items-center gap-1.5"
+                        >
+                          <ChevronUp className="w-4 h-4" />
+                          <span>عرض الجزء المختصر فقط</span>
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <BrandCircularMark size="sm" />
+                          <InlineQrImg
+                            url={storyQrUrl}
+                            size={180}
+                            alt={`باركود ${item.title}`}
+                            className="w-14 h-14 rounded-lg p-1 bg-white border border-[#E2E8F0]"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-amber-500/15 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm font-extrabold text-amber-800 dark:text-amber-300">
+                  <div className="flex items-center gap-2">
+                    <Feather className="w-4 h-4 shrink-0" />
+                    <span>{displaySignature}</span>
+                  </div>
+                  {onShareCard && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onShareCard({
+                          id: `mother_${item.id}`,
+                          title: item.title,
+                          excerpt: buildTeaserExcerpt(item.body, 320),
+                          body: item.body,
+                          author: displaySignature,
+                          sourceLabel: meta.label,
+                          category: 'قصص أم محمد',
+                          mediaType: 'quote',
+                          cardTheme: 'emerald',
+                          likes: 0,
+                          commentsCount: 0,
+                          publishedAtLabel: dateText || 'واحة أم محمد',
+                          createdAt: item.createdAt,
+                          shareUrl: storyQrUrl,
+                        })
+                      }
+                      className="px-3 py-1.5 rounded-xl bg-[#fffbf2] dark:bg-white/10 text-[#7c5800] dark:text-[#f2be5e] text-xs font-extrabold inline-flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>بطاقة + باركود</span>
+                    </button>
+                  )}
                 </div>
               </article>
             );

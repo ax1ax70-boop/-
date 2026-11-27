@@ -1,8 +1,10 @@
 import {Archive, Copy, Heart, Loader2, Search, Sparkles} from 'lucide-react';
 import {useEffect, useMemo, useState} from 'react';
-import type {PermanentArchiveItem, PoetryAnecdoteItem} from '../types';
+import type {PermanentArchiveItem, PoetryAnecdoteItem, Post} from '../types';
 import {useI18n} from '../utils/i18n';
 import {resolveFontFamilyCss, resolveFontSizeSpec, useReadingPrefs} from '../utils/readingPrefs';
+import {getPublicSiteUrl} from '../utils/storage';
+import {trackInteraction} from '../utils/telemetry';
 import {ComingSoonState} from './ComingSoonState';
 
 type OasisTab = 'all' | 'islamic_poetry' | 'anecdote' | 'favorites' | 'permanent_archive';
@@ -13,18 +15,22 @@ export function PoetryOasisView({
   poetryItems,
   permanentArchive,
   initialMode = 'all',
+  highlightedItemId,
   onPoetryUpdated,
   onArchiveUpdated,
+  onShareCard,
   onNotify,
 }: {
   poetryItems: PoetryAnecdoteItem[];
   permanentArchive: PermanentArchiveItem[];
   initialMode?: 'all' | 'permanent_archive';
+  highlightedItemId?: string | null;
   onPoetryUpdated: (items: PoetryAnecdoteItem[]) => void;
   onArchiveUpdated: () => void;
+  onShareCard?: (post: Post) => void;
   onNotify: (msg: string) => void;
 }) {
-  const {formatNumber} = useI18n();
+  const {tr, formatNumber} = useI18n();
   const {prefs} = useReadingPrefs();
   const fontSpec = resolveFontSizeSpec(prefs.fontSize);
 
@@ -45,7 +51,20 @@ export function PoetryOasisView({
   }, [initialMode]);
 
   useEffect(() => {
-    // Auto daily sync every 24h in background if stale
+    if (!highlightedItemId) return;
+    if (permanentArchive.some((a) => a.id === highlightedItemId)) {
+      setTab('permanent_archive');
+    } else {
+      setTab('all');
+    }
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`poetry-item-${highlightedItemId}`);
+      el?.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [highlightedItemId, permanentArchive]);
+
+  useEffect(() => {
     void fetch('/api/poetry/daily-sync', {method: 'POST'})
       .then((res) => (res.ok ? res.json() : null))
       .then((data: {updated?: boolean; poetryItems?: PoetryAnecdoteItem[]} | null) => {
@@ -125,22 +144,59 @@ export function PoetryOasisView({
     });
   }, [permanentArchive, q]);
 
-  const handleCopy = async (title: string, body: string, author: string) => {
+  const handleCopy = async (id: string, title: string, body: string, author: string) => {
+    const clean = body.replace(/\s+/g, ' ').trim();
+    const itemUrl = getPublicSiteUrl(`/?tab=poetry&item=${encodeURIComponent(id)}`);
+    const payload =
+      clean.length > 140
+        ? `${title}\n\n${clean.slice(0, 120).trim()}...\n\n📲 لقراءة الأبيات أو الطرفة كاملة:\n${itemUrl}\n— ${author} · موقع مواعظ وعبر`
+        : `${title}\n\n${body}\n\n— ${author}\n🌐 ${itemUrl}`;
     try {
-      await navigator.clipboard.writeText(`${title}\n\n${body}\n\n— ${author}\nموقع مواعظ وعبر`);
-      onNotify('تم نسخ النص بنجاح');
+      await navigator.clipboard.writeText(payload);
+      trackInteraction('sermon_share', 'poetry');
+      onNotify(
+        clean.length > 140
+          ? tr('تم نسخ المختصر مع رابط استكمال النص', 'Short teaser & link copied')
+          : tr('تم نسخ النص بنجاح', 'Copied cleanly'),
+      );
     } catch {
-      onNotify('تعذر النسخ التلقائي');
+      onNotify(tr('تعذر النسخ التلقائي', 'Unable to copy automatically'));
     }
+  };
+
+  const shareAsClassicCard = (
+    id: string,
+    title: string,
+    body: string,
+    author: string,
+    categoryLabel: string,
+  ) => {
+    if (!onShareCard) return;
+    onShareCard({
+      id: `poetry_${id}`,
+      title,
+      excerpt: body,
+      body,
+      author,
+      sourceLabel: categoryLabel,
+      category: categoryLabel,
+      mediaType: 'quote',
+      cardTheme: 'emerald',
+      likes: 0,
+      commentsCount: 0,
+      publishedAtLabel: categoryLabel,
+      createdAt: new Date().toISOString(),
+      shareUrl: getPublicSiteUrl(`/?tab=poetry&item=${encodeURIComponent(id)}`),
+    });
   };
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-5 sm:p-6 shadow-sm space-y-4">
+      <div className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#223a32] p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-[#0e1d25] dark:text-white">
-              واحة الشعر والطرائف والأرشيف الشامل الدائم
+              {tr('واحة الشعر والطرائف والأرشيف الشامل الدائم', 'Poetry & Anecdotes Oasis')}
             </h1>
             <p className="text-sm text-[#3e4a42] dark:text-slate-300 mt-1">
               شعر إسلامي رصين ونوادر العرب والبلغاء للترويح المباح دون محاذير شرعية · يتجدد يومياً ويُحفظ دائماً في الأرشيف
@@ -196,7 +252,7 @@ export function PoetryOasisView({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="ابحث في الأبيات أو النوادر..."
-              className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#081712] pr-9 pl-3 py-2 text-sm"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/15 bg-[#f8faf9] dark:bg-[#1b3029] pr-9 pl-3 py-2 text-sm"
             />
           </div>
         </div>
@@ -223,8 +279,13 @@ export function PoetryOasisView({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredArchive.map((arch) => (
                 <article
+                  id={`poetry-item-${arch.id}`}
                   key={arch.id}
-                  className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-5 space-y-3"
+                  className={`rounded-2xl border bg-white dark:bg-[#223a32] p-5 space-y-3 ${
+                    highlightedItemId === arch.id
+                      ? 'border-[#006a46] ring-2 ring-[#006a46]/30'
+                      : 'border-slate-200/80 dark:border-white/10'
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-2 text-xs text-[#6e7a71] dark:text-slate-400">
                     <span className="font-bold text-[#006a46] dark:text-[#6cdba6]">{arch.sourceLabel}</span>
@@ -232,21 +293,36 @@ export function PoetryOasisView({
                   </div>
                   <h3 className="text-base font-extrabold text-[#0e1d25] dark:text-white">{arch.title}</h3>
                   <p
+                    dir="rtl"
                     style={{fontFamily: resolveFontFamilyCss(prefs.fontFamily)}}
                     className={`${fontSpec.bodyClass} text-[#28352e] dark:text-slate-200 whitespace-pre-line`}
                   >
                     {arch.body}
                   </p>
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-white/10 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-white/10 text-xs">
                     <span className="font-semibold text-[#6e7a71] dark:text-slate-400">{arch.author}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(arch.title, arch.body, arch.author)}
-                      className="text-[#006a46] dark:text-[#6cdba6] font-bold flex items-center gap-1 hover:underline"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>نسخ</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {onShareCard && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            shareAsClassicCard(arch.id, arch.title, arch.body, arch.author, 'طرائف وعبر')
+                          }
+                          className="px-2.5 py-1.5 rounded-lg bg-[#fffbf2] dark:bg-white/10 text-[#7c5800] dark:text-[#f2be5e] font-bold flex items-center gap-1"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>بطاقة + QR</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void handleCopy(arch.id, arch.title, arch.body, arch.author)}
+                        className="text-[#006a46] dark:text-[#6cdba6] font-bold flex items-center gap-1 hover:underline"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>مشاركة مختصرة</span>
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -265,10 +341,16 @@ export function PoetryOasisView({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredPoetry.map((item) => {
             const isFav = favIds.includes(item.id);
+            const catLabel = item.kind === 'islamic_poetry' ? 'شعر إسلامي' : 'طرائف وعبر';
             return (
               <article
+                id={`poetry-item-${item.id}`}
                 key={item.id}
-                className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-5 sm:p-6 shadow-sm flex flex-col justify-between space-y-4"
+                className={`rounded-3xl border bg-white dark:bg-[#223a32] p-5 sm:p-6 shadow-sm flex flex-col justify-between space-y-4 ${
+                  highlightedItemId === item.id
+                    ? 'border-[#006a46] ring-2 ring-[#006a46]/30'
+                    : 'border-slate-200/80 dark:border-white/10'
+                }`}
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2 text-xs text-[#6e7a71] dark:text-slate-400">
@@ -290,6 +372,7 @@ export function PoetryOasisView({
 
                   <h3 className="text-lg font-extrabold text-[#0e1d25] dark:text-white">{item.title}</h3>
                   <p
+                    dir="rtl"
                     style={{fontFamily: resolveFontFamilyCss(prefs.fontFamily)}}
                     className={`${fontSpec.bodyClass} text-[#1d2a22] dark:text-slate-200 whitespace-pre-line`}
                   >
@@ -297,16 +380,28 @@ export function PoetryOasisView({
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-white/10 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-white/10 text-xs">
                   <span className="font-semibold text-[#6e7a71] dark:text-slate-400">{item.author}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(item.title, item.body, item.author)}
-                    className="px-3 py-1.5 rounded-lg bg-[#f3f6f4] dark:bg-white/10 text-[#0e1d25] dark:text-white font-bold flex items-center gap-1.5"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>نسخ</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {onShareCard && (
+                      <button
+                        type="button"
+                        onClick={() => shareAsClassicCard(item.id, item.title, item.body, item.author, catLabel)}
+                        className="px-3 py-1.5 rounded-lg bg-[#fffbf2] dark:bg-white/10 text-[#7c5800] dark:text-[#f2be5e] font-bold flex items-center gap-1.5"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>بطاقة + باركود</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleCopy(item.id, item.title, item.body, item.author)}
+                      className="px-3 py-1.5 rounded-lg bg-[#f3f6f4] dark:bg-white/10 text-[#0e1d25] dark:text-white font-bold flex items-center gap-1.5"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>مشاركة مختصرة</span>
+                    </button>
+                  </div>
                 </div>
               </article>
             );

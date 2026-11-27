@@ -589,7 +589,7 @@ export function LibraryView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={tr('ابحث في الدروس والكتب والعلماء...', 'Search lessons, PDFs, scholars...')}
-            className="w-full min-h-[44px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
+            className="w-full min-h-[44px] ps-10 pe-4 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-sm text-[#0e1d25] dark:text-white focus:outline-none focus:border-[#006a46]"
           />
         </div>
       </div>
@@ -634,7 +634,7 @@ export function LibraryView({
                   className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
                     active
                       ? 'bg-[#006a46] text-white shadow-xs'
-                      : 'bg-white dark:bg-[#0b1f18] border border-slate-200/80 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
+                      : 'bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
                   }`}
                 >
                   {cat.label}
@@ -659,7 +659,7 @@ export function LibraryView({
               {filteredHajouriLessons.map((lesson) => (
                 <article
                   key={lesson.id}
-                  className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-5 flex flex-col justify-between gap-3.5"
+                  className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-5 flex flex-col justify-between gap-3.5"
                 >
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#6e7a71] dark:text-slate-400">
@@ -730,7 +730,7 @@ export function LibraryView({
 
       {/* PDF Books Shelf (Curated + Admin Multi-PDF IndexedDB Manager) & ZIP Bundle */}
       {(filterType === 'all' || filterType === 'hajouri' || filterType === 'imams' || filterType === 'students') && (
-        <section className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-5 sm:p-6 shadow-xs space-y-5">
+        <section className="rounded-3xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#223a32] p-5 sm:p-6 shadow-xs space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base sm:text-lg font-extrabold text-[#0e1d25] dark:text-white flex items-center gap-2">
@@ -753,7 +753,7 @@ export function LibraryView({
 
           {/* Admin-only Multi-PDF Upload Controls (IndexedDB) */}
           {isAdmin && (
-            <div className="rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-[#006a46]/25 p-4 space-y-3">
+            <div className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-[#006a46]/25 p-4 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6] flex items-center gap-1.5">
                   <FilePlus2 className="w-4 h-4" />
@@ -764,7 +764,7 @@ export function LibraryView({
                   value={pdfSectionAuthor}
                   onChange={(e) => setPdfSectionAuthor(e.target.value)}
                   placeholder="اسم المؤلف الاختياري للكتب المرفوعة..."
-                  className="min-h-[36px] px-3 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-xs w-full sm:w-64"
+                  className="min-h-[36px] px-3 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-xs w-full sm:w-64"
                 />
               </div>
 
@@ -813,7 +813,7 @@ export function LibraryView({
                   return (
                     <article
                       key={book.id}
-                      className="rounded-2xl border border-amber-500/25 bg-[#fffdf7] dark:bg-[#0a1c15] p-4 flex flex-col justify-between gap-3"
+                      className="rounded-2xl border border-amber-500/25 bg-[#fffdf7] dark:bg-[#1f362d] p-4 flex flex-col justify-between gap-3"
                     >
                       <div className="space-y-1">
                         <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
@@ -886,7 +886,7 @@ export function LibraryView({
                   return (
                     <article
                       key={book.id}
-                      className="rounded-2xl border border-emerald-600/25 bg-[#f4fbf7] dark:bg-[#0a1c15] p-4 flex flex-col justify-between gap-3"
+                      className="rounded-2xl border border-emerald-600/25 bg-[#f4fbf7] dark:bg-[#1f362d] p-4 flex flex-col justify-between gap-3"
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
@@ -963,7 +963,7 @@ export function LibraryView({
               return (
                 <article
                   key={book.id}
-                  className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#081712] p-4 flex flex-col justify-between gap-3"
+                  className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-[#fafcfb] dark:bg-[#1b3029] p-4 flex flex-col justify-between gap-3"
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2 text-xs text-[#006a46] dark:text-[#6cdba6] font-bold">
@@ -1130,7 +1130,7 @@ export function LibraryView({
                         {imamWorks.map((entry) => (
                           <div
                             key={entry.id}
-                            className="rounded-2xl bg-white/90 dark:bg-[#081712] border border-slate-200/75 dark:border-white/10 p-3.5 space-y-1"
+                            className="rounded-2xl bg-white/90 dark:bg-[#1b3029] border border-slate-200/75 dark:border-white/10 p-3.5 space-y-1"
                           >
                             <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-[#006a46] dark:text-[#6cdba6]">
                               <span>{entry.category}</span>
@@ -1183,7 +1183,7 @@ export function LibraryView({
             {SHEIKH_STUDENTS_WORKS.map((entry) => (
               <article
                 key={entry.id}
-                className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0c211a] p-5 space-y-2.5"
+                className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#223a32] p-5 space-y-2.5"
               >
                 <span className="text-xs font-bold text-[#006a46] dark:text-[#6cdba6]">{entry.category}</span>
                 <h3 className="text-base font-extrabold text-[#0e1d25] dark:text-white">{entry.title}</h3>
@@ -1229,7 +1229,7 @@ export function LibraryView({
                   className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
                     sadaTab === t.id
                       ? 'bg-[#006a46] text-white'
-                      : 'bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
+                      : 'bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-[#3e4a42] dark:text-slate-300'
                   }`}
                 >
                   {t.label}
@@ -1259,7 +1259,7 @@ export function LibraryView({
                     className={`rounded-2xl border p-4 space-y-1.5 ${
                       isPoet
                         ? 'bg-[#fffaf0] dark:bg-[#161a14] border-amber-500/30'
-                        : 'bg-white dark:bg-[#0a1c15] border-slate-200/80 dark:border-white/10'
+                        : 'bg-white dark:bg-[#1f362d] border-slate-200/80 dark:border-white/10'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -1305,7 +1305,7 @@ export function LibraryView({
                 {filteredSadaMaterials.map((item) => (
                   <article
                     key={item.id}
-                    className="rounded-2xl bg-white dark:bg-[#0a1c15] border border-slate-200/80 dark:border-white/10 p-4 space-y-2.5 shadow-xs"
+                    className="rounded-2xl bg-white dark:bg-[#1f362d] border border-slate-200/80 dark:border-white/10 p-4 space-y-2.5 shadow-xs"
                   >
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className="px-2.5 py-0.5 rounded-lg bg-[#eefaf3] dark:bg-emerald-950/60 text-[#006a46] dark:text-[#6cdba6] font-extrabold">
@@ -1415,7 +1415,7 @@ export function LibraryView({
                     href={sec.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="min-h-[42px] px-3 py-2 rounded-xl bg-white dark:bg-[#0b1f18] border border-slate-200/75 dark:border-white/10 hover:border-[#7c5800] text-xs font-semibold text-[#0e1d25] dark:text-slate-200 flex items-center justify-between gap-1.5 transition-colors"
+                    className="min-h-[42px] px-3 py-2 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/75 dark:border-white/10 hover:border-[#7c5800] text-xs font-semibold text-[#0e1d25] dark:text-slate-200 flex items-center justify-between gap-1.5 transition-colors"
                   >
                     <span className="truncate">{isEn ? sec.labelEn : sec.labelAr}</span>
                     <ExternalLink className="w-3 h-3 text-[#7c5800] dark:text-[#f2be5e] shrink-0" />
@@ -1425,7 +1425,7 @@ export function LibraryView({
             </div>
 
             {/* Portal 2: alilmia.com */}
-            <div className="rounded-2xl bg-[#e8f6ff] dark:bg-[#112921] border border-[#006389]/25 dark:border-white/10 p-5 space-y-4">
+            <div className="rounded-2xl bg-[#e8f6ff] dark:bg-[#28453b] border border-[#006389]/25 dark:border-white/10 p-5 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <div className="w-11 h-11 rounded-2xl bg-[#006389] text-white flex items-center justify-center shrink-0">
@@ -1458,7 +1458,7 @@ export function LibraryView({
                     href={sec.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="min-h-[42px] px-3 py-2 rounded-xl bg-white dark:bg-[#0b1f18] border border-slate-200/75 dark:border-white/10 hover:border-[#006389] text-xs font-semibold text-[#0e1d25] dark:text-slate-200 flex items-center justify-between gap-1.5 transition-colors"
+                    className="min-h-[42px] px-3 py-2 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200/75 dark:border-white/10 hover:border-[#006389] text-xs font-semibold text-[#0e1d25] dark:text-slate-200 flex items-center justify-between gap-1.5 transition-colors"
                   >
                     <span className="truncate">{isEn ? sec.labelEn : sec.labelAr}</span>
                     <ExternalLink className="w-3 h-3 text-[#006389] dark:text-[#80cfff] shrink-0" />
@@ -1483,7 +1483,7 @@ export function LibraryView({
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 hover:border-[#006a46] p-4 flex flex-col justify-between gap-2.5"
+                    className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 hover:border-[#006a46] p-4 flex flex-col justify-between gap-2.5"
                   >
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
@@ -1532,7 +1532,7 @@ export function LibraryView({
           </div>
 
           {/* Paste Any Public t.me Audio Link for Immediate Inline Playback */}
-          <div className="rounded-2xl bg-[#e8f6ff] dark:bg-[#0e241d] border border-[#006389]/20 p-4 space-y-3">
+          <div className="rounded-2xl bg-[#e8f6ff] dark:bg-[#254036] border border-[#006389]/20 p-4 space-y-3">
             <p className="text-xs font-extrabold text-[#006389] dark:text-[#80cfff]">
               شغّل أي رابط منشور أو صوتية عامة من تيليجرام مباشرة داخل الصفحة بدون الحاجة لتطبيق تيليجرام أو تسجيل دخول:
             </p>
@@ -1543,7 +1543,7 @@ export function LibraryView({
                 value={customTgLink}
                 onChange={(e) => setCustomTgLink(e.target.value)}
                 placeholder="https://t.me/ax1ax70/104574"
-                className="flex-1 min-h-[42px] px-3.5 rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-xs sm:text-sm"
+                className="flex-1 min-h-[42px] px-3.5 rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-xs sm:text-sm"
               />
               <button
                 type="button"
@@ -1555,7 +1555,7 @@ export function LibraryView({
               </button>
             </div>
             {customTgEmbed && (
-              <div className="rounded-2xl overflow-hidden bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10">
+              <div className="rounded-2xl overflow-hidden bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10">
                 <iframe
                   title="مشغّل تيليجرام المباشر"
                   src={customTgEmbed.embedUrl}
@@ -1571,7 +1571,7 @@ export function LibraryView({
               return (
                 <article
                   key={audio.id}
-                  className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 flex flex-col justify-between gap-3"
+                  className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 flex flex-col justify-between gap-3"
                 >
                   <div className="flex items-start gap-3">
                     <button
@@ -1599,7 +1599,7 @@ export function LibraryView({
                   </div>
 
                   {isExpanded && (
-                    <div className="rounded-2xl overflow-hidden bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10">
+                    <div className="rounded-2xl overflow-hidden bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10">
                       <iframe
                         title={audio.title}
                         src={audio.embedUrl.includes('userpic=') ? audio.embedUrl : `${audio.embedUrl}&userpic=false`}
@@ -1679,7 +1679,7 @@ export function LibraryView({
             {filteredVideos.map((video) => (
               <article
                 key={video.id}
-                className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 overflow-hidden flex flex-col justify-between"
+                className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 overflow-hidden flex flex-col justify-between"
               >
                 <div>
                   <button
@@ -1762,7 +1762,7 @@ export function LibraryView({
               className={`min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors whitespace-nowrap ${
                 showReadingControls
                   ? 'bg-[#006a46] text-white border-[#006a46]'
-                  : 'bg-white dark:bg-[#0d211a] border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-200 hover:border-[#006a46]/50'
+                  : 'bg-white dark:bg-[#223a32] border-slate-200/80 dark:border-white/10 text-[#0e1d25] dark:text-slate-200 hover:border-[#006a46]/50'
               }`}
             >
               <Type className="w-3.5 h-3.5 shrink-0" />
@@ -1786,7 +1786,7 @@ export function LibraryView({
               return (
                 <article
                   key={post.id}
-                  className="rounded-2xl bg-white dark:bg-[#0d211a] border border-slate-200/80 dark:border-white/10 p-4 flex flex-col justify-between gap-3"
+                  className="rounded-2xl bg-white dark:bg-[#223a32] border border-slate-200/80 dark:border-white/10 p-4 flex flex-col justify-between gap-3"
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs text-[#6e7a71] dark:text-slate-400">
@@ -1856,7 +1856,7 @@ export function LibraryView({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-4xl h-[85vh] rounded-3xl bg-white dark:bg-[#0c211a] p-4 sm:p-5 shadow-2xl flex flex-col gap-3"
+            className="w-full max-w-4xl h-[85vh] rounded-3xl bg-white dark:bg-[#223a32] p-4 sm:p-5 shadow-2xl flex flex-col gap-3"
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-white/10 pb-2.5">
               <h3 className="text-sm sm:text-base font-extrabold text-[#0e1d25] dark:text-white truncate">
@@ -1897,7 +1897,7 @@ export function LibraryView({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl rounded-3xl bg-white dark:bg-[#0c211a] p-4 sm:p-6 shadow-2xl space-y-4"
+            className="w-full max-w-2xl rounded-3xl bg-white dark:bg-[#223a32] p-4 sm:p-6 shadow-2xl space-y-4"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1931,7 +1931,7 @@ export function LibraryView({
                 />
               </div>
             ) : (
-              <div className="w-full min-h-[260px] rounded-2xl overflow-hidden bg-[#f4faff] dark:bg-[#081712] border border-slate-200 dark:border-white/10">
+              <div className="w-full min-h-[260px] rounded-2xl overflow-hidden bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200 dark:border-white/10">
                 <iframe
                   title={previewMedia.item.title}
                   src={
@@ -1986,7 +1986,7 @@ export function LibraryView({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl rounded-3xl bg-white dark:bg-[#0c211a] p-5 sm:p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto"
+            className="w-full max-w-2xl rounded-3xl bg-white dark:bg-[#223a32] p-5 sm:p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto"
           >
             <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-white/10 pb-3">
               <div className="space-y-1 min-w-0">
@@ -2023,7 +2023,7 @@ export function LibraryView({
                 {selectedLesson.summary}
               </p>
 
-              <div className="rounded-2xl bg-[#f4faff] dark:bg-[#081712] border border-slate-200/70 dark:border-white/10 p-4 space-y-2.5">
+              <div className="rounded-2xl bg-[#f4faff] dark:bg-[#1b3029] border border-slate-200/70 dark:border-white/10 p-4 space-y-2.5">
                 <h4 className="text-xs sm:text-sm font-bold text-[#006a46] dark:text-[#6cdba6]">
                   أبرز المحاور والفوائد العلمية في هذه السلسلة:
                 </h4>

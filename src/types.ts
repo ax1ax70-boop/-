@@ -3,6 +3,7 @@ export type NavTab =
   | 'home'
   | 'quran'
   | 'wird'
+  | 'quiz'
   | 'hisn'
   | 'fatawa'
   | 'adhkar'
@@ -33,9 +34,30 @@ export type LibraryFilterType =
   | 'telegram'
   | 'youtube';
 
-export type ThemeMode = 'system' | 'light' | 'dark';
+export type ThemeMode = 'system' | 'light' | 'dark' | 'solar';
+
+export interface SectionStatEntry {
+  visits: number;
+  interactions: number;
+  shares?: number;
+}
+
+export type SectionStatsMap = Record<string, SectionStatEntry>;
 export type VisitorPageColor = 'default' | 'emerald' | 'parchment' | 'sky' | 'indigo' | 'sand';
-export type Language = 'ar' | 'en';
+export type Language =
+  | 'ar'
+  | 'en'
+  | 'hi'
+  | 'ml'
+  | 'bn'
+  | 'tl'
+  | 'ur'
+  | 'id'
+  | 'ta'
+  | 'tr'
+  | 'fr'
+  | 'ne'
+  | 'ps';
 export type CardTheme = 'emerald' | 'azure' | 'gold' | 'midnight';
 export type MediaType = 'quote' | 'sada' | 'video' | 'audio';
 export type AdminGesture = 'long_press' | 'multi_tap';
@@ -63,7 +85,7 @@ export type AdminPermission =
   | 'manage_accounts'
   | 'manage_settings';
 
-export type MainHubId = 'hub_quran' | 'hub_knowledge' | 'hub_media' | 'hub_support';
+export type MainHubId = 'hub_quran' | 'hub_knowledge' | 'hub_quiz' | 'hub_media' | 'hub_support';
 
 export interface AdminAccountSummary {
   username: string;
@@ -235,6 +257,7 @@ export interface Post {
   isTrending?: boolean;
   syncedPlatforms?: string[];
   listeningTrend?: ListeningDay[];
+  shareUrl?: string;
 }
 
 export interface FatwaItem {
@@ -444,6 +467,8 @@ export interface ClassicDawahCard {
   isTrending?: boolean;
   engagementCount?: number;
   createdAt?: string;
+  createdBy?: string;
+  qrUrl?: string;
 }
 
 export interface PoetryAnecdoteItem {
@@ -473,6 +498,7 @@ export interface PermanentArchiveItem {
 export interface VisitorProfile {
   id: string;
   firebaseUid?: string;
+  username?: string;
   provider: 'google' | 'facebook' | 'email';
   name: string;
   email?: string;
@@ -480,6 +506,7 @@ export interface VisitorProfile {
   likedPostIds?: string[];
   bookmarkedPostIds?: string[];
   bookmarkedFatwaIds?: string[];
+  quizProgress?: DawahQuizState;
   createdAt: string;
   lastLoginAt?: string;
 }
@@ -603,6 +630,44 @@ export interface CustomBookItem {
   createdAt?: string;
 }
 
+export type ContentApprovalSection =
+  | 'post'
+  | 'dawah_card'
+  | 'fatwa'
+  | 'mother_oasis'
+  | 'sada_material'
+  | 'adhkar'
+  | 'book'
+  | 'deaf_mute_video'
+  | 'poetry';
+
+export type ContentApprovalAction = 'create' | 'update' | 'delete';
+export type ContentApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ContentApprovalRequest {
+  id: string;
+  section: ContentApprovalSection;
+  action: ContentApprovalAction;
+  targetId?: string;
+  title: string;
+  summary: string;
+  payload: Record<string, unknown>;
+  submittedBy: string;
+  submittedByRole: AdminRole;
+  status: ContentApprovalStatus;
+  reviewedBy?: string;
+  reviewNote?: string;
+  createdAt: string;
+  reviewedAt?: string;
+}
+
+export interface DawahCardsMeta {
+  lastUpdatedDate: string;
+  lastUpdatedAt: string;
+  source: 'ai' | 'manual' | 'seed';
+  count?: number;
+}
+
 export interface BootstrapSnapshot {
   posts: Post[];
   fatawa: FatwaItem[];
@@ -614,7 +679,9 @@ export interface BootstrapSnapshot {
   visitorsCount: number;
   onlineVisitorsCount?: number;
   clicksCount: number;
+  registeredMembersCount?: number;
   nafahatMeta?: NafahatMeta;
+  dawahCardsMeta?: DawahCardsMeta;
   poetryItems?: PoetryAnecdoteItem[];
   lastPoetryAiDate?: string;
   permanentArchive?: PermanentArchiveItem[];
@@ -626,6 +693,7 @@ export interface BootstrapSnapshot {
   sadaMaterials?: SadaMaterialItem[];
   aiDawahCards?: ClassicDawahCard[];
   cardEngagement?: Record<string, number>;
+  sectionStats?: SectionStatsMap;
   siteAppearance?: SiteAppearanceConfig;
   meetConfig?: AdminMeetConfig;
   gesture: AdminGesture;
@@ -723,6 +791,13 @@ export interface AdminMonthlyAnalytics {
     likes: number;
     commentsCount: number;
   }>;
+  sectionAnalytics?: Array<{
+    id: string;
+    label: string;
+    visits: number;
+    interactions: number;
+    shares?: number;
+  }>;
 }
 
 export type HajouriLessonCategory =
@@ -744,3 +819,53 @@ export interface HajouriLessonItem {
   highlights: string[];
   officialUrl: string;
 }
+
+export type DawahQuizSubject = 'all' | 'aqeedah' | 'quran' | 'hadith_seerah' | 'fiqh' | 'akhlaq';
+
+export interface DawahQuizQuestion {
+  id: string;
+  subject: Exclude<DawahQuizSubject, 'all'>;
+  questionAr: string;
+  questionEn: string;
+  optionsAr: string[];
+  optionsEn: string[];
+  correctIndex: number;
+  explanationAr: string;
+  explanationEn: string;
+  sourceAr: string;
+  sourceEn: string;
+  points: number;
+}
+
+export interface DawahQuizAnswerRecord {
+  selectedIndex: number;
+  isCorrect: boolean;
+  earnedPoints: number;
+  answeredAt: string;
+}
+
+export interface DawahQuizState {
+  totalPoints: number;
+  totalCorrect: number;
+  totalAnswered: number;
+  streakDays: number;
+  lastCompletedDate: string | null;
+  todayDate: string;
+  todayAnswers: Record<string, DawahQuizAnswerRecord>;
+  todayCompletionBonusClaimed: boolean;
+  practicedQuestionIds: string[];
+}
+
+export interface QuizLeaderboardEntry {
+  id: string;
+  nickname: string;
+  category: DawahQuizSubject;
+  score: number;
+  correctCount: number;
+  totalQuestions: number;
+  streakDays?: number;
+  dateKey?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+

@@ -63,7 +63,7 @@ export default defineConfig(() => {
           ],
           shortcuts: [
             {
-              name: 'الرئيسية والنفحات',
+              name: 'الرئيسية',
               short_name: 'الرئيسية',
               url: '/?tab=home',
               icons: [{src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png'}],

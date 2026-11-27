@@ -92,7 +92,7 @@ export const INITIAL_DEAF_MUTE_VIDEOS: DeafMuteVideoItem[] = [
     youtubeUrl: '',
     status: 'upcoming',
     category: 'العقيدة والتوحيد',
-    managerName: 'المهندس يونس عبد الكريم',
+    managerName: 'إدارة قسم الصم والبكم',
     createdAt: '2026-11-20T09:00:00.000Z',
   },
   {
@@ -105,7 +105,7 @@ export const INITIAL_DEAF_MUTE_VIDEOS: DeafMuteVideoItem[] = [
     youtubeUrl: '',
     status: 'upcoming',
     category: 'الطهارة والصلاة',
-    managerName: 'المهندس يونس عبد الكريم',
+    managerName: 'إدارة قسم الصم والبكم',
     createdAt: '2026-11-21T09:00:00.000Z',
   },
   {
@@ -118,7 +118,7 @@ export const INITIAL_DEAF_MUTE_VIDEOS: DeafMuteVideoItem[] = [
     youtubeUrl: '',
     status: 'upcoming',
     category: 'الأذكار والآداب',
-    managerName: 'المهندس يونس عبد الكريم',
+    managerName: 'إدارة قسم الصم والبكم',
     createdAt: '2026-11-22T09:00:00.000Z',
   },
 ];

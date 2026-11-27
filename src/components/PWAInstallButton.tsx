@@ -124,7 +124,7 @@ export function PWAInstallButton({
   return (
     <>
       {variant === 'box' ? (
-        <div className="w-full rounded-2xl bg-[#eefaf3] dark:bg-[#112921] border border-[#006a46]/25 p-3.5 space-y-2.5">
+        <div className="w-full rounded-2xl bg-[#eefaf3] dark:bg-[#28453b] border border-[#006a46]/25 p-3.5 space-y-2.5">
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-2.5 text-sm font-bold text-[#006a46] dark:text-[#6cdba6]">
               <Download className="w-4.5 h-4.5 shrink-0" />
@@ -146,7 +146,7 @@ export function PWAInstallButton({
               <button
                 type="button"
                 onClick={handleShare}
-                className="min-h-[42px] px-3 py-2 rounded-xl bg-white dark:bg-[#0a1914] border border-[#006a46]/30 hover:border-[#006a46] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                className="min-h-[42px] px-3 py-2 rounded-xl bg-white dark:bg-[#1d332b] border border-[#006a46]/30 hover:border-[#006a46] text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
               >
                 <Share2 className="w-3.5 h-3.5 shrink-0" />
                 <span>{tr('مشاركة الرابط', 'Share Link')}</span>
@@ -155,7 +155,7 @@ export function PWAInstallButton({
           </div>
         </div>
       ) : variant === 'sidebar' ? (
-        <div className="rounded-xl bg-[#eefaf3] dark:bg-[#112921] border border-[#006a46]/20 p-2 space-y-1.5">
+        <div className="rounded-xl bg-[#eefaf3] dark:bg-[#28453b] border border-[#006a46]/20 p-2 space-y-1.5">
           {!isInstalled && (
             <button
               type="button"
@@ -170,7 +170,7 @@ export function PWAInstallButton({
             <button
               type="button"
               onClick={handleShare}
-              className="w-full min-h-[38px] px-3 py-1.5 rounded-lg bg-white dark:bg-[#0a1914] border border-[#006a46]/25 text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-2.5 transition-colors whitespace-nowrap"
+              className="w-full min-h-[38px] px-3 py-1.5 rounded-lg bg-white dark:bg-[#1d332b] border border-[#006a46]/25 text-[#006a46] dark:text-[#6cdba6] text-xs font-bold flex items-center gap-2.5 transition-colors whitespace-nowrap"
             >
               <Share2 className="w-4 h-4 shrink-0" />
               <span>{tr('مشاركة الرابط', 'Share Link')}</span>
@@ -190,7 +190,7 @@ export function PWAInstallButton({
           onClick={() => setShowGuide(false)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#0c211a] text-[#0e1d25] dark:text-[#e3f3fe] p-6 shadow-2xl space-y-4 max-h-[calc(100dvh-96px)] overflow-y-auto"
+            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#223a32] text-[#0e1d25] dark:text-[#e3f3fe] p-6 shadow-2xl space-y-4 max-h-[calc(100dvh-96px)] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -211,7 +211,7 @@ export function PWAInstallButton({
             </div>
 
             {isIOS ? (
-              <div className="rounded-2xl bg-[#e8f6ff] dark:bg-[#112921] p-4 space-y-2 text-sm leading-relaxed">
+              <div className="rounded-2xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 space-y-2 text-sm leading-relaxed">
                 <p className="font-bold text-[#006a46] dark:text-[#6cdba6]">
                   {tr('التثبيت على iPhone و iPad:', 'Install on iPhone & iPad:')}
                 </p>
@@ -225,7 +225,7 @@ export function PWAInstallButton({
               </div>
             ) : (
               <div className="space-y-3 text-sm leading-relaxed">
-                <div className="rounded-2xl bg-[#e8f6ff] dark:bg-[#112921] p-4 space-y-1.5">
+                <div className="rounded-2xl bg-[#e8f6ff] dark:bg-[#28453b] p-4 space-y-1.5">
                   <p className="font-bold text-[#006a46] dark:text-[#6cdba6]">
                     {tr('خطوات التثبيت في Chrome:', 'How to install in Chrome:')}
                   </p>

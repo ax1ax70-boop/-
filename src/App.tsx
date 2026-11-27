@@ -1,7 +1,6 @@
 import {
   Archive,
   ArrowRight,
-  BellRing,
   BookOpen,
   CheckCircle2,
   Compass,
@@ -10,6 +9,7 @@ import {
   Feather,
   Flower2,
   Globe,
+  GraduationCap,
   HandHeart,
   Home as HomeIcon,
   Image as ImageIcon,
@@ -20,7 +20,6 @@ import {
   Menu,
   Monitor,
   Moon,
-  Palette,
   RefreshCw,
   Search,
   Settings,
@@ -28,6 +27,7 @@ import {
   Sparkles,
   Star,
   Sun,
+  Sunrise,
   UserCheck,
   Users,
   Video,
@@ -42,15 +42,17 @@ import {AppSettingsModal, type AppSettingsSection} from './components/AppSetting
 import {BrandEmblem, resolveIcon} from './components/BrandEmblem';
 import {CardShareModal} from './components/CardShareModal';
 import {HomeView} from './components/HomeView';
-import {PWAInstallButton, useOnlineStatus} from './components/PWAInstallButton';
+import {LanguagePickerModal} from './components/LanguagePickerModal';
+import {useOnlineStatus} from './components/PWAInstallButton';
 import {SiteFooter} from './components/SiteFooter';
 import {SplashScreen} from './components/SplashScreen';
-import {VisitorAuthModal} from './components/VisitorAuthModal';
+import {VISITOR_SESSION_TOKEN_KEY, VisitorAuthModal} from './components/VisitorAuthModal';
 import {
   INITIAL_DEAF_MUTE_VIDEOS,
   appendOnlyMergeById,
   mergeCloudAndLocalById,
 } from './data/contentRepository';
+import {DAWAH_CARDS_RESET_EPOCH, isConciseClassicCard} from './data/dawahCards';
 import {exportAdhkarLifetimePayload} from './utils/adhkarStats';
 import {
   cloudFetchVisitorProfile,
@@ -61,11 +63,13 @@ import {
   subscribeCloudCollections,
 } from './utils/cloudSync';
 import {EXTERNAL_PORTAL_OPEN_EVENT, type ExternalPortalPayload} from './utils/externalPortal';
+import {getLanguageMeta} from './data/uiTranslations';
 import {useI18n} from './utils/i18n';
 import {useLiveStats} from './utils/liveStats';
 import {
   type AdhkarReminderSettings,
   checkAndTriggerScheduledReminders,
+  computeNextScheduledDelayMs,
   loadReminderSettings,
   saveReminderSettings,
 } from './utils/notifications';
@@ -73,16 +77,29 @@ import {
   DEFAULT_FONT_SIZE_PX,
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
-  PAGE_COLOR_OPTIONS,
   usePageColor,
   useReadingPrefs,
 } from './utils/readingPrefs';
 import {
+  TELEMETRY_UPDATED_EVENT,
+  mergeSectionStatsMonotonic,
+  readLocalTelemetryFloors,
+  saveLocalTelemetryFloors,
   sendPresenceHeartbeat,
   sendPresenceLeave,
+  setCurrentTelemetrySection,
   trackInteraction,
+  trackSectionVisit,
   trackVisitorSession,
+  type TelemetryCountersPayload,
 } from './utils/telemetry';
+import {
+  computeSolarWindow,
+  loadSavedSolarCoords,
+  requestDeviceSolarCoords,
+  type SolarCoordinates,
+} from './utils/solarTheme';
+import {loadDawahQuizState, mergeRemoteQuizState} from './utils/quizStorage';
 import {
   DEFAULT_APP_ICONS,
   DEFAULT_SITE_CONFIG,
@@ -104,6 +121,7 @@ import type {
   ClassicDawahCard,
   CustomAdhkarItem,
   CustomBookItem,
+  DawahCardsMeta,
   DeafMuteVideoItem,
   FatwaItem,
   LibraryFilterType,
@@ -115,6 +133,7 @@ import type {
   Post,
   SadaMaterialItem,
   SavedArchiveFatwa,
+  SectionStatsMap,
   SiteAppearanceConfig,
   SiteConfig,
   SocialLink,
@@ -143,6 +162,9 @@ const BookmarksView = lazy(() =>
 );
 const ChannelsView = lazy(() =>
   import('./components/ChannelsView').then((m) => ({default: m.ChannelsView})),
+);
+const DailyDawahQuizCard = lazy(() =>
+  import('./components/DailyDawahQuizCard').then((m) => ({default: m.DailyDawahQuizCard})),
 );
 const DailyWirdView = lazy(() =>
   import('./components/DailyWirdView').then((m) => ({default: m.DailyWirdView})),
@@ -305,6 +327,33 @@ function getInitialPostId(): string | null {
   return p || null;
 }
 
+function getInitialStoryId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const s = params.get('story')?.trim();
+  return s || null;
+}
+
+function getInitialQuranPage(): number | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const raw = new URLSearchParams(window.location.search).get('page')?.trim();
+  const parsed = raw ? Number(raw) : NaN;
+  if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 604) return Math.floor(parsed);
+  return undefined;
+}
+
+function getInitialDhikrId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const d = new URLSearchParams(window.location.search).get('dhikr')?.trim();
+  return d || null;
+}
+
+function getInitialPoetryItemId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const item = new URLSearchParams(window.location.search).get('item')?.trim();
+  return item || null;
+}
+
 function getInitialTab(): NavTab {
   if (typeof window === 'undefined') return 'splash';
   const params = new URLSearchParams(window.location.search);
@@ -323,6 +372,7 @@ function getInitialTab(): NavTab {
     tabParam === 'home' ||
     tabParam === 'quran' ||
     tabParam === 'wird' ||
+    tabParam === 'quiz' ||
     tabParam === 'fatawa' ||
     tabParam === 'adhkar' ||
     tabParam === 'library' ||
@@ -352,9 +402,9 @@ function getInitialTab(): NavTab {
 }
 
 export default function App() {
-  const {isEn, toggleLang, tr, formatNumber} = useI18n();
-  const {activeFontSizePx, setCustomFontSizePx, stepFontSize} = useReadingPrefs();
-  const {pageColor, pageColorOption, setPageColor} = usePageColor();
+  const {langMeta, isEn, setLang, tr, formatNumber} = useI18n();
+  const {activeFontSizePx, stepFontSize} = useReadingPrefs();
+  const {pageColor, pageColorOption} = usePageColor();
   const {recordView} = useLiveStats();
   const [initialSnapshot] = useState(() => loadSnapshot());
   const [initialMedia] = useState(() => loadCachedMediaFeeds());
@@ -365,7 +415,7 @@ export default function App() {
   const [prevTab, setPrevTab] = useState<NavTab>('home');
   const [tabHistory, setTabHistory] = useState<NavTab[]>([]);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(() => getInitialPostId());
-  const [quranInitialPage, setQuranInitialPage] = useState<number | undefined>(undefined);
+  const [quranInitialPage, setQuranInitialPage] = useState<number | undefined>(() => getInitialQuranPage());
   const [libraryInitialFilter, setLibraryInitialFilter] = useState<LibraryFilterType>('all');
 
   const [posts, setPosts] = useState<Post[]>(() => initialSnapshot.posts);
@@ -375,13 +425,22 @@ export default function App() {
   const [cachedAt, setCachedAt] = useState(() => initialSnapshot.cachedAt);
   const [isSyncing, setIsSyncing] = useState(false);
   const [visitorsCount, setVisitorsCount] = useState(() =>
-    Math.max(4580, initialSnapshot.visitorsCount ?? 4580),
+    Math.max(4580, initialSnapshot.visitorsCount ?? 4580, readLocalTelemetryFloors().visitorsCount),
   );
   const [onlineVisitorsCount, setOnlineVisitorsCount] = useState(() =>
     Math.max(initialSnapshot.onlineVisitorsCount ?? 1, 1),
   );
-  const [clicksCount, setClicksCount] = useState(() => initialSnapshot.clicksCount ?? 0);
+  const [clicksCount, setClicksCount] = useState(() =>
+    Math.max(8540, initialSnapshot.clicksCount ?? 8540, readLocalTelemetryFloors().clicksCount),
+  );
+  const [registeredMembersCount, setRegisteredMembersCount] = useState(() =>
+    Math.max(initialSnapshot.registeredMembersCount ?? 0, readLocalTelemetryFloors().registeredMembersCount),
+  );
+  const [sectionStats, setSectionStats] = useState<SectionStatsMap>(() =>
+    mergeSectionStatsMonotonic(initialSnapshot.sectionStats, readLocalTelemetryFloors().sectionStats),
+  );
   const [nafahatMeta, setNafahatMeta] = useState<NafahatMeta | undefined>(() => initialSnapshot.nafahatMeta);
+  const [dawahCardsMeta, setDawahCardsMeta] = useState<DawahCardsMeta | undefined>(() => initialSnapshot.dawahCardsMeta);
 
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>(() => {
     try {
@@ -422,7 +481,7 @@ export default function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
       const raw = localStorage.getItem(THEME_KEY);
-      return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'light';
+      return raw === 'light' || raw === 'dark' || raw === 'system' || raw === 'solar' ? raw : 'light';
     } catch {
       return 'light';
     }
@@ -433,7 +492,17 @@ export default function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  const isDark = themeMode === 'dark' || (themeMode === 'system' && systemPrefersDark);
+  const [solarCoords, setSolarCoords] = useState<SolarCoordinates | null>(() => loadSavedSolarCoords());
+  const [solarLocating, setSolarLocating] = useState(false);
+  const [solarTick, setSolarTick] = useState(0);
+
+  void solarTick;
+  const solarWindow = computeSolarWindow(solarCoords, new Date(), isEn);
+
+  const isDark =
+    themeMode === 'dark' ||
+    (themeMode === 'system' && systemPrefersDark) ||
+    (themeMode === 'solar' && solarWindow.isNight);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -453,6 +522,9 @@ export default function App() {
   });
   const [reminderSettings, setReminderSettings] = useState<AdhkarReminderSettings>(() =>
     loadReminderSettings(),
+  );
+  const [highlightedDhikrId, setHighlightedDhikrId] = useState<string | null>(() =>
+    getInitialDhikrId(),
   );
 
   const [motherPrayersCount, setMotherPrayersCount] = useState(() => initialSnapshot.motherPrayersCount);
@@ -521,8 +593,16 @@ export default function App() {
   const [sadaMaterials, setSadaMaterials] = useState<SadaMaterialItem[]>(
     () => initialSnapshot.sadaMaterials || [],
   );
-  const [aiDawahCards, setAiDawahCards] = useState<ClassicDawahCard[]>(
-    () => initialSnapshot.aiDawahCards || [],
+  const filterConciseDawahCards = useCallback(
+    (cards: ClassicDawahCard[]) =>
+      cards.filter(
+        (c) => isConciseClassicCard(c) && (!c.createdAt || c.createdAt >= DAWAH_CARDS_RESET_EPOCH),
+      ),
+    [],
+  );
+
+  const [aiDawahCards, setAiDawahCards] = useState<ClassicDawahCard[]>(() =>
+    filterConciseDawahCards(initialSnapshot.aiDawahCards || []),
   );
   const [cardEngagement, setCardEngagement] = useState<Record<string, number>>(
     () => initialSnapshot.cardEngagement || {},
@@ -541,13 +621,16 @@ export default function App() {
   const [externalPortal, setExternalPortal] = useState<ExternalPortalPayload | null>(null);
   const [visitorProfile, setVisitorProfile] = useState<VisitorProfile | null>(() => {
     try {
-      const raw = window.localStorage.getItem(VISITOR_PROFILE_KEY);
+      const raw =
+        window.localStorage.getItem(VISITOR_PROFILE_KEY) ||
+        window.sessionStorage.getItem(VISITOR_PROFILE_KEY);
       return raw ? (JSON.parse(raw) as VisitorProfile) : null;
     } catch {
       return null;
     }
   });
   const [visitorAuthModalOpen, setVisitorAuthModalOpen] = useState(false);
+  const [languageModalOpen, setLanguageModalOpen] = useState(false);
 
   const [brandHandle, setBrandHandle] = useState(() => initialSnapshot.brandHandle);
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>(() => initialSnapshot.socialLinks);
@@ -568,6 +651,42 @@ export default function App() {
     setActiveTab('home');
   }, []);
 
+  // Auto-restore persistent saved visitor login session on startup
+  useEffect(() => {
+    let savedToken = '';
+    try {
+      savedToken =
+        window.localStorage.getItem(VISITOR_SESSION_TOKEN_KEY) ||
+        window.sessionStorage.getItem(VISITOR_SESSION_TOKEN_KEY) ||
+        '';
+    } catch {
+      savedToken = '';
+    }
+    if (!savedToken) return;
+    void fetch('/api/visitor/session', {
+      headers: {Authorization: `Bearer ${savedToken}`},
+      cache: 'no-store',
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: {profile?: VisitorProfile} | null) => {
+        if (!data?.profile) return;
+        setVisitorProfile(data.profile);
+        if (data.profile.quizProgress) {
+          mergeRemoteQuizState(data.profile.quizProgress);
+        }
+        try {
+          if (window.localStorage.getItem(VISITOR_SESSION_TOKEN_KEY)) {
+            window.localStorage.setItem(VISITOR_PROFILE_KEY, JSON.stringify(data.profile));
+          } else {
+            window.sessionStorage.setItem(VISITOR_PROFILE_KEY, JSON.stringify(data.profile));
+          }
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
   // System dark mode listener
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -577,6 +696,20 @@ export default function App() {
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
+
+  // Solar sunrise/sunset automatic re-evaluation timer
+  useEffect(() => {
+    if (themeMode !== 'solar') return;
+    const timeoutId = window.setTimeout(
+      () => setSolarTick((t) => t + 1),
+      Math.min(solarWindow.nextTransitionMs + 1000, 2_147_483_000),
+    );
+    const intervalId = window.setInterval(() => setSolarTick((t) => t + 1), 60_000);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+    };
+  }, [themeMode, solarWindow.nextTransitionMs]);
 
   // Apply dark class to <html>
   useEffect(() => {
@@ -638,28 +771,41 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const openTargetedAdhkar = (dhikrId?: string) => {
+      setAdhkarInitialSection('adhkar');
+      if (dhikrId) {
+        setHighlightedDhikrId(dhikrId);
+      }
+      setActiveTab('adhkar');
+    };
+
     const runCheck = () => {
       void checkAndTriggerScheduledReminders({
         settings: reminderSettings,
         isEn,
         appName: isEn ? 'Mawaedh & Ibar' : siteConfig.appName,
         onUpdateSettings: updateReminderSettings,
-        onOpenAdhkar: () => {
-          setAdhkarInitialSection('adhkar');
-          setActiveTab('adhkar');
-        },
+        onOpenAdhkar: openTargetedAdhkar,
         onInAppNotify: notify,
       });
     };
 
     runCheck();
     const intervalId = window.setInterval(runCheck, 30_000);
+    const nextDelayMs = computeNextScheduledDelayMs(reminderSettings);
+    const exactTimerId =
+      nextDelayMs !== null
+        ? window.setTimeout(() => {
+            runCheck();
+          }, nextDelayMs)
+        : null;
     const onVisibility = () => {
       if (document.visibilityState === 'visible') runCheck();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       window.clearInterval(intervalId);
+      if (exactTimerId !== null) window.clearTimeout(exactTimerId);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [reminderSettings, isEn, siteConfig.appName, updateReminderSettings, notify]);
@@ -758,14 +904,30 @@ export default function App() {
   // Register unique browser session visit once and track interactive UI clicks
   useEffect(() => {
     let active = true;
-    const applyPresencePayload = (
-      res: {visitorsCount?: number; clicksCount?: number; onlineVisitorsCount?: number} | null,
-    ) => {
+    const applyPresencePayload = (res: TelemetryCountersPayload | null) => {
       if (!active || !res) return;
+      saveLocalTelemetryFloors({
+        visitorsCount: res.visitorsCount,
+        clicksCount: res.clicksCount,
+        registeredMembersCount: res.registeredMembersCount,
+        sectionStats: res.sectionStats,
+      });
       if (typeof res.visitorsCount === 'number') {
-        setVisitorsCount(Math.max(4580, res.visitorsCount));
+        const nextVal = res.visitorsCount;
+        setVisitorsCount((prev) => Math.max(prev, 4580, nextVal));
       }
-      if (typeof res.clicksCount === 'number') setClicksCount(res.clicksCount);
+      if (typeof res.clicksCount === 'number') {
+        const nextClicks = res.clicksCount;
+        setClicksCount((prev) => Math.max(prev, 8540, nextClicks));
+      }
+      if (typeof res.registeredMembersCount === 'number') {
+        const nextMembers = res.registeredMembersCount;
+        setRegisteredMembersCount((prev) => Math.max(prev, nextMembers));
+      }
+      if (res.sectionStats) {
+        const incomingSec = res.sectionStats;
+        setSectionStats((prev) => mergeSectionStatsMonotonic(prev, incomingSec));
+      }
       if (typeof res.onlineVisitorsCount === 'number') {
         setOnlineVisitorsCount(Math.max(1, res.onlineVisitorsCount));
       }
@@ -797,20 +959,48 @@ export default function App() {
       if (now - lastClickTrackedAtRef.current < 1200) return;
       lastClickTrackedAtRef.current = now;
       setClicksCount((c) => c + 1);
-      trackInteraction('click');
+      const updatedSections = trackInteraction('click');
+      if (updatedSections) {
+        setSectionStats((prev) => mergeSectionStatsMonotonic(prev, updatedSections));
+      }
+    };
+
+    const handleTelemetryUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<SectionStatsMap>).detail;
+      if (detail && typeof detail === 'object') {
+        setSectionStats((prev) => mergeSectionStatsMonotonic(prev, detail));
+      }
     };
 
     document.addEventListener('click', handleGlobalClick, {passive: true});
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener(TELEMETRY_UPDATED_EVENT, handleTelemetryUpdated);
     return () => {
       active = false;
       window.clearInterval(pulseId);
       document.removeEventListener('click', handleGlobalClick);
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener(TELEMETRY_UPDATED_EVENT, handleTelemetryUpdated);
     };
   }, []);
+
+  // Track cumulative per-section visits cleanly whenever a user enters a section
+  const lastTrackedSectionRef = useRef<string>('');
+  useEffect(() => {
+    if (activeTab === 'splash' || activeTab === 'admin-studio') return;
+    const normalizedSection =
+      activeTab === 'about' || activeTab === 'support' ? 'about-support' : activeTab;
+    setCurrentTelemetrySection(normalizedSection);
+    if (lastTrackedSectionRef.current === normalizedSection) return;
+    lastTrackedSectionRef.current = normalizedSection;
+    void trackSectionVisit(normalizedSection).then((nextStats) => {
+      if (nextStats) {
+        setSectionStats((prev) => mergeSectionStatsMonotonic(prev, nextStats));
+      }
+    });
+  }, [activeTab]);
 
   useEffect(() => {
     saveSnapshot({
@@ -824,7 +1014,9 @@ export default function App() {
       visitorsCount,
       onlineVisitorsCount,
       clicksCount,
+      registeredMembersCount,
       nafahatMeta,
+      dawahCardsMeta,
       poetryItems,
       permanentArchive,
       motherOasisItems,
@@ -834,6 +1026,7 @@ export default function App() {
       sadaMaterials,
       aiDawahCards,
       cardEngagement,
+      sectionStats,
       visitorReviews,
       siteAppearance,
       gesture,
@@ -850,7 +1043,9 @@ export default function App() {
     visitorsCount,
     onlineVisitorsCount,
     clicksCount,
+    registeredMembersCount,
     nafahatMeta,
+    dawahCardsMeta,
     poetryItems,
     permanentArchive,
     motherOasisItems,
@@ -860,6 +1055,7 @@ export default function App() {
     sadaMaterials,
     aiDawahCards,
     cardEngagement,
+    sectionStats,
     visitorReviews,
     siteAppearance,
     gesture,
@@ -905,6 +1101,8 @@ export default function App() {
         post?: Post;
         posts?: Post[];
         nafahatMeta?: NafahatMeta;
+        aiDawahCards?: ClassicDawahCard[];
+        dawahCardsMeta?: DawahCardsMeta;
       };
       if (data.siteConfig) {
         setSiteConfig({...DEFAULT_SITE_CONFIG, ...data.siteConfig});
@@ -916,6 +1114,16 @@ export default function App() {
       }
       if (data.nafahatMeta) {
         setNafahatMeta(data.nafahatMeta);
+      }
+      if (Array.isArray(data.aiDawahCards) && data.aiDawahCards.length > 0) {
+        setAiDawahCards((prev) =>
+          filterConciseDawahCards(
+            mergeCloudAndLocalById(data.aiDawahCards!, filterConciseDawahCards(prev), []),
+          ),
+        );
+      }
+      if (data.dawahCardsMeta) {
+        setDawahCardsMeta(data.dawahCardsMeta);
       }
     } catch {
       // Keep cached/default Nafahat silently offline or if unavailable
@@ -944,7 +1152,9 @@ export default function App() {
           visitorsCount?: number;
           onlineVisitorsCount?: number;
           clicksCount?: number;
+          registeredMembersCount?: number;
           nafahatMeta?: NafahatMeta;
+          dawahCardsMeta?: DawahCardsMeta;
           poetryItems?: PoetryAnecdoteItem[];
           permanentArchive?: PermanentArchiveItem[];
           motherOasisItems?: MotherOasisItem[];
@@ -954,6 +1164,7 @@ export default function App() {
           sadaMaterials?: SadaMaterialItem[];
           aiDawahCards?: ClassicDawahCard[];
           cardEngagement?: Record<string, number>;
+          sectionStats?: SectionStatsMap;
           meetConfig?: AdminMeetConfig;
           visitorReviews?: VisitorReviewItem[];
           siteAppearance?: SiteAppearanceConfig;
@@ -970,12 +1181,33 @@ export default function App() {
         }
         if (data.gesture) setGesture(data.gesture);
         if (typeof data.motherPrayersCount === 'number') setMotherPrayersCount(data.motherPrayersCount);
-        if (typeof data.visitorsCount === 'number') setVisitorsCount(Math.max(4580, data.visitorsCount));
+        saveLocalTelemetryFloors({
+          visitorsCount: data.visitorsCount,
+          clicksCount: data.clicksCount,
+          registeredMembersCount: data.registeredMembersCount,
+          sectionStats: data.sectionStats,
+        });
+        if (typeof data.visitorsCount === 'number') {
+          const nextVal = data.visitorsCount;
+          setVisitorsCount((prev) => Math.max(prev, 4580, nextVal));
+        }
         if (typeof data.onlineVisitorsCount === 'number') {
           setOnlineVisitorsCount(Math.max(1, data.onlineVisitorsCount));
         }
-        if (typeof data.clicksCount === 'number') setClicksCount(data.clicksCount);
+        if (typeof data.clicksCount === 'number') {
+          const nextClicks = data.clicksCount;
+          setClicksCount((prev) => Math.max(prev, 8540, nextClicks));
+        }
+        if (typeof data.registeredMembersCount === 'number') {
+          const nextMembers = data.registeredMembersCount;
+          setRegisteredMembersCount((prev) => Math.max(prev, nextMembers));
+        }
+        if (data.sectionStats) {
+          const incomingSec = data.sectionStats;
+          setSectionStats((prev) => mergeSectionStatsMonotonic(prev, incomingSec));
+        }
         if (data.nafahatMeta) setNafahatMeta(data.nafahatMeta);
+        if (data.dawahCardsMeta) setDawahCardsMeta(data.dawahCardsMeta);
         if (Array.isArray(data.poetryItems)) {
           setPoetryItems((prev) => appendOnlyMergeById(data.poetryItems!, prev));
         }
@@ -1000,7 +1232,11 @@ export default function App() {
           setSadaMaterials((prev) => mergeCloudAndLocalById(data.sadaMaterials!, prev, []));
         }
         if (Array.isArray(data.aiDawahCards)) {
-          setAiDawahCards((prev) => mergeCloudAndLocalById(data.aiDawahCards!, prev, []));
+          setAiDawahCards((prev) =>
+            filterConciseDawahCards(
+              mergeCloudAndLocalById(data.aiDawahCards!, filterConciseDawahCards(prev), []),
+            ),
+          );
         }
         if (data.cardEngagement && typeof data.cardEngagement === 'object') {
           setCardEngagement((prev) => {
@@ -1081,7 +1317,11 @@ export default function App() {
           setSadaMaterials((prev) => mergeCloudAndLocalById(cloud.sadaMaterials, prev, []));
         }
         if (cloud.aiDawahCards.length > 0) {
-          setAiDawahCards((prev) => mergeCloudAndLocalById(cloud.aiDawahCards, prev, []));
+          setAiDawahCards((prev) =>
+            filterConciseDawahCards(
+              mergeCloudAndLocalById(cloud.aiDawahCards, filterConciseDawahCards(prev), []),
+            ),
+          );
         }
         if (cloud.visitorReviews.length > 0) {
           setVisitorReviews((prev) => mergeCloudAndLocalById(cloud.visitorReviews, prev, []));
@@ -1120,7 +1360,11 @@ export default function App() {
         if (items.length > 0) setSadaMaterials((prev) => mergeCloudAndLocalById(items, prev, []));
       },
       onAiDawahCards: (items) => {
-        if (items.length > 0) setAiDawahCards((prev) => mergeCloudAndLocalById(items, prev, []));
+        if (items.length > 0) {
+          setAiDawahCards((prev) =>
+            filterConciseDawahCards(mergeCloudAndLocalById(items, filterConciseDawahCards(prev), [])),
+          );
+        }
       },
       onReviews: (items) => {
         if (items.length > 0) setVisitorReviews((prev) => mergeCloudAndLocalById(items, prev, []));
@@ -1211,6 +1455,7 @@ export default function App() {
         bookmarkedFatwaIds,
         likedPostIds: likedIds,
         adhkarLifetime: exportAdhkarLifetimePayload(),
+        quizProgress: loadDawahQuizState(),
       }),
     }).catch(() => undefined);
     void cloudUpsertVisitorProfile(enrichedProfile).catch(() => undefined);
@@ -1481,18 +1726,26 @@ export default function App() {
 
   const copySadaMessage = async (post: Post) => {
     const shareLink =
-      post.id === 'daily_wisdom_featured'
+      post.shareUrl ||
+      (post.id === 'daily_wisdom_featured'
         ? getPublicSiteUrl('/?tab=home')
-        : getPublicSiteUrl(`/?post=${encodeURIComponent(post.id)}`);
-    const formatted = `✨ *${post.title}*\n\n${post.body}\n\n— ${post.author}\n\n📚 خدمة صدى الخير الدعوية · ${siteConfig.appName} (${brandHandle})\n🌐 رابط الموقع: ${shareLink}\n📲 تيليجرام: https://t.me/ax1ax70${post.youtubeUrl ? `\n🎬 يوتيوب: ${post.youtubeUrl}` : ''}`;
+        : getPublicSiteUrl(`/?post=${encodeURIComponent(post.id)}`));
+    const cleanBody = post.body.replace(/\s+/g, ' ').trim();
+    const isLong = cleanBody.length > 550;
+    const excerptPart = isLong ? `${cleanBody.slice(0, 420).trim()}...` : post.body;
+    const formatted = isLong
+      ? `✨ *${post.title}*\n\n${excerptPart}\n\n📲 لتكملة القصة أو الحديث عبر الباركود أو الرابط:\n${shareLink}\n— ${post.author} · ${siteConfig.appName}`
+      : `✨ *${post.title}*\n\n${post.body}\n\n— ${post.author}\n\n📚 خدمة صدى الخير الدعوية · ${siteConfig.appName} (${brandHandle})\n🌐 رابط الموقع: ${shareLink}\n📲 تيليجرام: https://t.me/ax1ax70${post.youtubeUrl ? `\n🎬 يوتيوب: ${post.youtubeUrl}` : ''}`;
 
     try {
       await navigator.clipboard.writeText(formatted);
       notify(
-        tr(
-          'تم نسخ النفحة مع رابط الموقع، جاهزة للمشاركة في الواتساب وتيليجرام',
-          'Reflection & site link copied cleanly for WhatsApp and Telegram',
-        ),
+        isLong
+          ? tr('تم نسخ المختصر مع رابط استكمال الموعظة للمشاركة', 'Short teaser & continuation link copied')
+          : tr(
+              'تم نسخ النفحة مع رابط الموقع، جاهزة للمشاركة في الواتساب وتيليجرام',
+              'Reflection & site link copied cleanly for WhatsApp and Telegram',
+            ),
       );
     } catch {
       if (navigator.share) {
@@ -1527,12 +1780,13 @@ export default function App() {
         : getPublicSiteUrl(`${window.location.pathname}${window.location.search || '/?tab=home'}`.replace('//', '/'));
     const shareData = {
       title: siteConfig.appName,
-      text: `${siteConfig.appName} · ${siteConfig.appTagline} (مواعظ، مصحف، الأذكار والأدعية الجامعة، فتاوى وأذكار)\n🌐 ${shareUrl}`,
+      text: `${siteConfig.appName} (مواعظ، مصحف، الأذكار والأدعية الجامعة، فتاوى وأذكار)\n🌐 ${shareUrl}`,
       url: shareUrl,
     };
     if (navigator.share) {
       try {
         await navigator.share(shareData);
+        trackInteraction('sermon_share', 'app_share');
         return;
       } catch {
         // Fallback to clipboard copy
@@ -1540,6 +1794,7 @@ export default function App() {
     }
     try {
       await navigator.clipboard.writeText(shareUrl);
+      trackInteraction('sermon_share', 'app_share');
       notify('تم نسخ رابط المنصة العام — يمكنك إرساله مباشرة للوالدة والجميع');
     } catch {
       notify('انسخ الرابط من المتصفح لمشاركته مباشرة');
@@ -1554,11 +1809,19 @@ export default function App() {
     setLoginModalOpen(true);
   };
 
+  const brandHoldTriggeredRef = useRef(false);
+
   const handleBrandPointerDown = () => {
-    if (gesture !== 'long_press') return;
+    brandHoldTriggeredRef.current = false;
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+    }
     longPressTimerRef.current = window.setTimeout(() => {
+      longPressTimerRef.current = null;
+      brandHoldTriggeredRef.current = true;
+      tapTrackerRef.current = {count: 0, lastTs: 0};
       triggerAdminEntry();
-    }, 1800);
+    }, 5000);
   };
 
   const handleBrandPointerEnd = () => {
@@ -1569,9 +1832,13 @@ export default function App() {
   };
 
   const handleBrandTap = () => {
-    if (gesture !== 'multi_tap') return;
+    handleBrandPointerEnd();
+    if (brandHoldTriggeredRef.current) {
+      brandHoldTriggeredRef.current = false;
+      return;
+    }
     const now = Date.now();
-    if (now - tapTrackerRef.current.lastTs > 1500) {
+    if (now - tapTrackerRef.current.lastTs > 2500) {
       tapTrackerRef.current = {count: 1, lastTs: now};
     } else {
       tapTrackerRef.current = {count: tapTrackerRef.current.count + 1, lastTs: now};
@@ -1702,11 +1969,20 @@ export default function App() {
         },
         body: JSON.stringify({}),
       });
-      if (!res.ok) {
-        notify('تعذر تغيير حالة إخفاء الموعظة');
+      const data = (await res.json()) as {
+        post?: Post;
+        requiresApproval?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (res.status === 202 || data.requiresApproval) {
+        notify(data.message || 'تم إرسال طلب تغيير الظهور إلى المسؤول الأول للموافقة.');
         return;
       }
-      const data = (await res.json()) as {post?: Post};
+      if (!res.ok) {
+        notify(data.error || 'تعذر تغيير حالة إخفاء الموعظة');
+        return;
+      }
       if (data.post) {
         setPosts((prev) => prev.map((p) => (p.id === postId ? data.post! : p)));
         notify(data.post.hidden ? 'تم إخفاء الموعظة عن الزوار' : 'تم إظهار الموعظة للزوار');
@@ -1723,8 +1999,13 @@ export default function App() {
         method: 'DELETE',
         headers: {Authorization: `Bearer ${authToken}`},
       });
+      const data = (await res.json()) as {requiresApproval?: boolean; message?: string; error?: string};
+      if (res.status === 202 || data.requiresApproval) {
+        notify(data.message || 'تم إرسال طلب الحذف إلى المسؤول الأول للموافقة.');
+        return;
+      }
       if (!res.ok) {
-        notify('تعذر حذف الموعظة');
+        notify(data.error || 'تعذر حذف الموعظة');
         return;
       }
       setPosts((prev) => prev.filter((p) => p.id !== postId));
@@ -1949,6 +2230,58 @@ export default function App() {
     }
   };
 
+  const handleAdminRefreshDawahCardsWithResult = async (): Promise<{ok: boolean; message: string}> => {
+    if (!authToken) {
+      return {ok: false, message: 'يلزم تسجيل الدخول كمسؤول أو مشرف'};
+    }
+    try {
+      const res = await fetch('/api/admin/dawah-cards/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({count: 6}),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        added?: ClassicDawahCard[];
+        aiDawahCards?: ClassicDawahCard[];
+        dawahCardsMeta?: DawahCardsMeta;
+      };
+      if (!res.ok) {
+        return {
+          ok: false,
+          message: data.error || 'تعذر تجديد البطاقات الدعوية والأحاديث بالذكاء الاصطناعي حالياً',
+        };
+      }
+      if (Array.isArray(data.aiDawahCards)) {
+        setAiDawahCards(filterConciseDawahCards(data.aiDawahCards));
+      }
+      if (data.dawahCardsMeta) {
+        setDawahCardsMeta(data.dawahCardsMeta);
+      }
+      const addedLen = Array.isArray(data.added) ? data.added.length : 0;
+      return {
+        ok: true,
+        message:
+          addedLen > 0
+            ? `تم توليد ${addedLen} بطاقات وأحاديث صحيحة جديدة غير مكررة ونشرها لجميع الزوار`
+            : 'تم التحقق من البطاقات الدعوية وهي محدثة ومتنوعة دون تكرار',
+      };
+    } catch {
+      return {
+        ok: false,
+        message: 'تعذر الاتصال بالخادم لتحديث البطاقات الدعوية',
+      };
+    }
+  };
+
+  const handleAdminRefreshDawahCards = async (): Promise<void> => {
+    const result = await handleAdminRefreshDawahCardsWithResult();
+    notify(result.message);
+  };
+
   const selectedPost = posts.find((p) => p.id === selectedPostId) || null;
 
   useEffect(() => {
@@ -1962,7 +2295,7 @@ export default function App() {
     return <SplashScreen onFinish={finishSplash} />;
   }
 
-  type MainHubId = 'hub_quran' | 'hub_knowledge' | 'hub_media' | 'hub_support';
+  type MainHubId = 'hub_quran' | 'hub_knowledge' | 'hub_quiz' | 'hub_media' | 'hub_support';
 
   interface HubSubItem {
     key: string;
@@ -1985,169 +2318,172 @@ export default function App() {
   const mainHubs: MainHubDef[] = [
     {
       id: 'hub_quran',
-      label: isEn ? 'The Noble Quran' : 'المصحف',
-      shortLabel: isEn ? 'Quran' : 'المصحف',
+      label: tr('المصحف', 'The Noble Quran'),
+      shortLabel: tr('المصحف', 'Quran'),
       defaultTab: 'quran',
       Icon: resolveIcon(appIcons.quran, 'bookOpen'),
       subItems: [
         {
           key: 'sub_quran',
           tab: 'quran',
-          label: isEn ? 'Noble Quran (Tafsir & Search)' : 'المصحف الشريف الشامل',
+          label: tr('المصحف الشريف الشامل', 'Noble Quran (Tafsir & Search)'),
           Icon: resolveIcon(appIcons.quran, 'bookOpen'),
         },
         {
           key: 'sub_wird',
           tab: 'wird',
-          label: isEn ? 'Daily Wird & Faith Tasks' : 'الورد اليومي التفاعلي',
+          label: tr('الورد اليومي التفاعلي', 'Daily Wird & Faith Tasks'),
           Icon: Sparkles,
         },
       ],
     },
     {
       id: 'hub_knowledge',
-      label: isEn ? 'Adhkar, Sermons & Libraries' : 'الأذكار والمواعظ والمكتبات العلمية والدعوية',
-      shortLabel: isEn ? 'Adhkar & Library' : 'الأذكار والمكتبات',
-      defaultTab: 'home',
+      label: tr('الأذكار والمواعظ والمكتبات العلمية والدعوية', 'Adhkar, Sermons & Libraries'),
+      shortLabel: tr('الأذكار والمكتبات', 'Adhkar & Library'),
+      defaultTab: 'adhkar',
       Icon: BookOpen,
       subItems: [
         {
-          key: 'sub_home',
-          tab: 'home',
-          label: isEn ? 'Daily Sermons' : 'المواعظ اليومية',
-          Icon: resolveIcon(appIcons.home, 'home'),
-        },
-        {
           key: 'sub_adhkar',
           tab: 'adhkar',
-          label: isEn ? 'Comprehensive Adhkar & Duas' : 'الأذكار والأدعية الجامعة',
+          label: tr('الأذكار والأدعية الجامعة', 'Comprehensive Adhkar & Duas'),
           Icon: resolveIcon(appIcons.adhkar, 'sun'),
         },
         {
           key: 'sub_archive',
           tab: 'archive',
-          label: isEn ? 'Permanent Archive' : 'الأرشيف الشامل الدائم',
+          label: tr('الأرشيف الشامل الدائم', 'Permanent Archive'),
           Icon: Archive,
         },
         {
           key: 'sub_hajouri',
           tab: 'library',
-          label: isEn ? 'Sh. Yahya Al-Hajouri Library' : 'مكتبة الشيخ يحيى الحجوري',
+          label: tr('مكتبة الشيخ يحيى الحجوري', 'Sh. Yahya Al-Hajouri Library'),
           Icon: BookOpen,
           libraryFilter: 'hajouri',
         },
         {
           key: 'sub_imams',
           tab: 'library',
-          label: isEn ? 'Senior Imams Library' : 'مكتبة الأئمة الكبار',
+          label: tr('مكتبة الأئمة الكبار', 'Senior Imams Library'),
           Icon: BookOpen,
           libraryFilter: 'imams',
         },
         {
           key: 'sub_sada',
           tab: 'library',
-          label: isEn ? 'Sada Al-Khair Service' : 'خدمة صدى الخير الدعوية',
+          label: tr('خدمة صدى الخير الدعوية', 'Sada Al-Khair Service'),
           Icon: Sparkles,
           libraryFilter: 'sada',
         },
         {
           key: 'sub_fatawa',
           tab: 'fatawa',
-          label: isEn ? 'Fatawa' : siteConfig.navFatawa,
+          label: tr(siteConfig.navFatawa, 'Fatawa'),
           Icon: resolveIcon(appIcons.fatawa, 'scale'),
+        },
+        {
+          key: 'sub_bookmarks',
+          tab: 'bookmarks',
+          label: tr('المحفوظات والمفضلة', 'Bookmarks & Saved'),
+          Icon: resolveIcon(appIcons.bookmarks, 'bookmark'),
+        },
+      ],
+    },
+    {
+      id: 'hub_quiz',
+      label: tr('الاختبار الدعوي اليومي', 'Daily Dawah Quiz'),
+      shortLabel: tr('الاختبار', 'Quiz'),
+      defaultTab: 'quiz',
+      Icon: GraduationCap,
+      subItems: [
+        {
+          key: 'sub_quiz',
+          tab: 'quiz',
+          label: tr('الاختبار الدعوي ولوحة المتصدرين', 'Dawah Quiz & Leaderboard'),
+          Icon: GraduationCap,
         },
       ],
     },
     {
       id: 'hub_media',
-      label: isEn ? 'Cards, Oases & Media' : 'البطاقات والواحات والمرئيات',
-      shortLabel: isEn ? 'Cards & Media' : 'البطاقات والمرئيات',
+      label: tr('البطاقات والواحات والمرئيات', 'Cards, Oases & Media'),
+      shortLabel: tr('البطاقات والمرئيات', 'Cards & Media'),
       defaultTab: 'cards',
       Icon: Compass,
       subItems: [
         {
           key: 'sub_cards',
           tab: 'cards',
-          label: isEn ? 'Classic Dawah Cards' : 'البطاقات الدعوية الكلاسيكية',
+          label: tr('البطاقات الدعوية الكلاسيكية', 'Classic Dawah Cards'),
           Icon: ImageIcon,
-        },
-        {
-          key: 'sub_nafahat',
-          tab: 'home',
-          label: isEn ? 'Renewing Reflections' : 'النفحات اليومية',
-          Icon: Sparkles,
         },
         {
           key: 'sub_mother',
           tab: 'mother-oasis',
-          label: isEn ? "Mother's Oasis" : 'واحة الداعية الفاضلة أمي',
+          label: tr('واحة الداعية الفاضلة أمي', "Mother's Oasis"),
           Icon: Flower2,
         },
         {
           key: 'sub_deaf',
           tab: 'deaf-mute',
-          label: isEn ? 'Deaf & Mute Section' : 'قسم الصم والبكم',
+          label: tr('قسم الصم والبكم', 'Deaf & Mute Section'),
           Icon: HandHeart,
         },
         {
           key: 'sub_poetry',
           tab: 'poetry',
-          label: isEn ? 'Poetry & Anecdotes' : 'واحة الشعر والطرائف',
+          label: tr('واحة الشعر والطرائف', 'Poetry & Anecdotes'),
           Icon: Feather,
         },
         {
           key: 'sub_channels',
           tab: 'channels',
-          label: isEn ? 'Audio & Telegram Player' : 'الصوتيات ومشغل تيليجرام',
+          label: tr('الصوتيات ومشغل تيليجرام', 'Audio & Telegram Player'),
           Icon: resolveIcon(appIcons.channels, 'share2'),
         },
         {
           key: 'sub_videos',
           tab: 'videos',
-          label: isEn ? 'Videos' : 'المرئيات',
+          label: tr('المرئيات', 'Videos'),
           Icon: Video,
         },
       ],
     },
     {
       id: 'hub_support',
-      label: isEn ? 'Support, Contact & About' : 'الدعم والتواصل وعن الموقع',
-      shortLabel: isEn ? 'Support & About' : 'الدعم وعن الموقع',
+      label: tr('الدعم والتواصل وعن الموقع', 'Support, Contact & About'),
+      shortLabel: tr('الدعم وعن الموقع', 'Support & About'),
       defaultTab: 'about-support',
       Icon: LifeBuoy,
       subItems: [
         {
           key: 'sub_tickets',
           tab: 'support',
-          label: isEn ? 'Requests & Tracking (#REQ)' : 'سجل ومتابعة الطلبات (#REQ)',
+          label: tr('سجل ومتابعة الطلبات', 'Requests & Tracking'),
           Icon: LifeBuoy,
           aboutSub: 'support',
         },
         {
           key: 'sub_reviews',
           tab: 'reviews',
-          label: isEn ? 'Visitor Reviews' : 'آراء وتقييمات الزوار',
+          label: tr('آراء وتقييمات الزوار', 'Visitor Reviews'),
           Icon: Star,
         },
         {
           key: 'sub_about',
           tab: 'about',
-          label: isEn ? 'About & Share App' : 'من نحن ومشاركة التطبيق',
+          label: tr('من نحن ومشاركة التطبيق', 'About & Share App'),
           Icon: resolveIcon(appIcons.about, 'info'),
           aboutSub: 'about',
         },
         {
           key: 'sub_disclaimer',
           tab: 'about-support',
-          label: isEn ? 'Disclaimer & 2027 Rights' : 'التنويه العلمي وحقوق 2027',
+          label: tr('التنويه العلمي وحقوق 2027', 'Disclaimer & 2027 Rights'),
           Icon: Shield,
           aboutSub: 'disclaimer',
-        },
-        {
-          key: 'sub_bookmarks',
-          tab: 'bookmarks',
-          label: isEn ? 'Bookmarks & Saved' : 'المحفوظات والمفضلة',
-          Icon: resolveIcon(appIcons.bookmarks, 'bookmark'),
         },
       ],
     },
@@ -2156,20 +2492,21 @@ export default function App() {
   const activeHubId: MainHubId =
     activeTab === 'quran' || activeTab === 'wird'
       ? 'hub_quran'
-      : activeTab === 'cards' ||
-          activeTab === 'mother-oasis' ||
-          activeTab === 'deaf-mute' ||
-          activeTab === 'poetry' ||
-          activeTab === 'videos' ||
-          activeTab === 'channels'
-        ? 'hub_media'
-        : activeTab === 'about-support' ||
-            activeTab === 'about' ||
-            activeTab === 'support' ||
-            activeTab === 'reviews' ||
-            activeTab === 'bookmarks'
-          ? 'hub_support'
-          : 'hub_knowledge';
+      : activeTab === 'quiz'
+        ? 'hub_quiz'
+        : activeTab === 'cards' ||
+            activeTab === 'mother-oasis' ||
+            activeTab === 'deaf-mute' ||
+            activeTab === 'poetry' ||
+            activeTab === 'videos' ||
+            activeTab === 'channels'
+          ? 'hub_media'
+          : activeTab === 'about-support' ||
+              activeTab === 'about' ||
+              activeTab === 'support' ||
+              activeTab === 'reviews'
+            ? 'hub_support'
+            : 'hub_knowledge';
 
   const activeHub = mainHubs.find((h) => h.id === activeHubId) || mainHubs[1];
 
@@ -2189,8 +2526,45 @@ export default function App() {
     return activeTab === sub.tab;
   };
 
+  const handleRequestSolarLocation = async () => {
+    if (solarLocating) return;
+    setSolarLocating(true);
+    try {
+      const coords = await requestDeviceSolarCoords();
+      setSolarCoords(coords);
+      setSolarTick((t) => t + 1);
+      const win = computeSolarWindow(coords, new Date(), isEn);
+      notify(
+        tr(
+          `تم تحديث موقعك — الشروق ${win.sunriseLabel} والغروب ${win.sunsetLabel}`,
+          `Location updated — Sunrise ${win.sunriseLabel}, Sunset ${win.sunsetLabel}`,
+        ),
+      );
+    } catch (err) {
+      notify(
+        err instanceof Error
+          ? err.message
+          : tr('تعذر تحديد الموقع الجغرافي حالياً', 'Could not determine location'),
+      );
+    } finally {
+      setSolarLocating(false);
+    }
+  };
+
   const applyThemeMode = (mode: ThemeMode) => {
     setThemeMode(mode);
+    if (mode === 'solar') {
+      if (!solarCoords) {
+        void handleRequestSolarLocation();
+      }
+      notify(
+        tr(
+          `تم تفعيل التبديل التلقائي حسب الشروق (${solarWindow.sunriseLabel}) والغروب (${solarWindow.sunsetLabel})`,
+          `Auto theme enabled for Sunrise (${solarWindow.sunriseLabel}) & Sunset (${solarWindow.sunsetLabel})`,
+        ),
+      );
+      return;
+    }
     notify(
       mode === 'system'
         ? tr('تم تفعيل المظهر التلقائي حسب إعدادات نظام التشغيل', 'System theme mode enabled')
@@ -2201,30 +2575,35 @@ export default function App() {
   };
 
   const cycleThemeMode = () => {
-    applyThemeMode(themeMode === 'system' ? 'light' : themeMode === 'light' ? 'dark' : 'system');
+    applyThemeMode(
+      themeMode === 'system'
+        ? 'light'
+        : themeMode === 'light'
+          ? 'dark'
+          : themeMode === 'dark'
+            ? 'solar'
+            : 'system',
+    );
   };
 
   const handleToggleLanguage = () => {
-    const nextIsEn = !isEn;
-    toggleLang();
-    notify(nextIsEn ? 'Switched interface language to English' : 'تم التبديل إلى اللغة العربية');
+    setLanguageModalOpen(true);
   };
 
-  const BookmarksIcon = resolveIcon(appIcons.bookmarks, 'bookmark');
-  const displayAppName = isEn ? 'Mawaedh & Ibar' : siteConfig.appName;
+  const displayAppName = tr(siteConfig.appName, 'Mawaedh & Ibar');
 
   const presetBgClass =
     pageColor !== 'default'
       ? pageColorOption.bgClass
       : siteAppearance.backgroundPreset === 'emerald_mist'
-        ? 'bg-[#f2faf6] dark:bg-[#06150f]'
+        ? 'bg-[#f2faf6] dark:bg-[#173329]'
         : siteAppearance.backgroundPreset === 'warm_parchment'
-          ? 'bg-[#fbf7ef] dark:bg-[#14110b]'
+          ? 'bg-[#fbf7ef] dark:bg-[#2b241b]'
           : siteAppearance.backgroundPreset === 'sky_calm'
-            ? 'bg-[#f3f9fd] dark:bg-[#07131a]'
+            ? 'bg-[#f3f9fd] dark:bg-[#192c3b]'
             : siteAppearance.backgroundPreset === 'deep_forest'
-              ? 'bg-[#eef6f1] dark:bg-[#04110b]'
-              : 'bg-[#FFFFFF] dark:bg-[#060f0d]';
+              ? 'bg-[#eef6f1] dark:bg-[#142b23]'
+              : 'bg-[#FFFFFF] dark:bg-[#162822]';
 
   const handleOpenSettingsTab = (section: AppSettingsSection = 'settings') => {
     openSettingsModal(section);
@@ -2252,7 +2631,7 @@ export default function App() {
 
       {/* Desktop Direction-Aware Sidebar (4 Main Hubs + Active Hub Quick Sub-Sections) */}
       <aside
-        className={`hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:top-[40px] lg:bottom-[40px] z-40 bg-white dark:bg-[#091813] border-slate-200/80 dark:border-white/10 p-4 justify-between overflow-y-auto ${
+        className={`hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:top-[40px] lg:bottom-[40px] z-40 bg-white dark:bg-[#1b3029] border-slate-200/80 dark:border-white/10 p-4 justify-between overflow-y-auto ${
           isEn ? 'lg:left-0 border-r' : 'lg:right-0 border-l'
         }`}
       >
@@ -2276,9 +2655,22 @@ export default function App() {
           </button>
 
           <nav className="space-y-2" aria-label={tr('الأقسام الرئيسية', 'Main Hubs Navigation')}>
+            <button
+              type="button"
+              onClick={() => navigateTo('home')}
+              className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-[13px] font-extrabold flex items-center gap-2.5 transition-colors text-start ${
+                activeTab === 'home'
+                  ? 'bg-[#006a46] text-white shadow-xs'
+                  : 'bg-[#f4faff] dark:bg-[#223a32] text-[#0e1d25] dark:text-slate-100 hover:bg-[#e2f5ec] dark:hover:bg-white/10'
+              }`}
+            >
+              <HomeIcon className="w-4 h-4 shrink-0" />
+              <span className="flex-1 leading-snug">{tr('الصفحة الرئيسية', siteConfig.navHome || 'الرئيسية')}</span>
+            </button>
+
             {mainHubs.map((hub) => {
               const Icon = hub.Icon;
-              const isHubCurrent = activeHubId === hub.id;
+              const isHubCurrent = activeTab !== 'home' && activeHubId === hub.id;
               return (
                 <div key={hub.id} className="space-y-1">
                   <button
@@ -2290,7 +2682,7 @@ export default function App() {
                     className={`w-full min-h-[42px] px-3 py-2 rounded-xl text-[13px] font-extrabold flex items-center gap-2.5 transition-colors text-start ${
                       isHubCurrent
                         ? 'bg-[#006a46] text-white shadow-xs'
-                        : 'bg-[#f4faff] dark:bg-[#112921] text-[#0e1d25] dark:text-slate-200 hover:bg-[#e2f5ec] dark:hover:bg-white/10'
+                        : 'bg-[#f4faff] dark:bg-[#223a32] text-[#0e1d25] dark:text-slate-100 hover:bg-[#e2f5ec] dark:hover:bg-white/10'
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
@@ -2328,12 +2720,6 @@ export default function App() {
                 </div>
               );
             })}
-
-            <PWAInstallButton
-              variant="sidebar"
-              onNotify={notify}
-              onShareAppLink={() => void shareAppLink()}
-            />
           </nav>
         </div>
 
@@ -2367,115 +2753,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Registration / Sign-in Button (تسجيل / دخول) */}
-          <button
-            type="button"
-            onClick={() => setVisitorAuthModalOpen(true)}
-            className="w-full min-h-[40px] px-3 py-2 rounded-xl bg-[#eefaf3] dark:bg-[#112921] hover:bg-[#daf3e6] dark:hover:bg-[#16362b] border border-[#006a46]/25 text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6] flex items-center justify-between transition-colors"
-          >
-            <span className="flex items-center gap-2 truncate">
-              <UserCheck className="w-4 h-4 shrink-0" />
-              <span className="truncate">
-                {visitorProfile ? visitorProfile.name : tr('تسجيل / دخول', 'Register / Sign In')}
-              </span>
-            </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-lg bg-[#006a46] text-white shrink-0">
-              {visitorProfile ? tr('مسجّل', 'Signed In') : tr('تسجيل', 'Join')}
-            </span>
-          </button>
-
-          {/* Language Switcher in Sidebar */}
-          <button
-            type="button"
-            onClick={handleToggleLanguage}
-            className="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-[#e8f6ff] dark:bg-[#112921] hover:bg-[#d5ecfb] dark:hover:bg-[#16362b] text-xs font-bold text-[#006a46] dark:text-[#6cdba6] flex items-center justify-between transition-colors"
-          >
-            <span className="flex items-center gap-2">
-              <Globe className="w-4 h-4 shrink-0" />
-              <span>{tr('اللغة · Language', 'Language · اللغة')}</span>
-            </span>
-            <span>{isEn ? 'العربية' : 'EN'}</span>
-          </button>
-
-          <div className="space-y-2">
-            <span className="text-[11px] font-semibold text-[#6e7a71] dark:text-slate-400 block px-1">
-              {tr('مظهر التطبيق ولون الصفحة', 'Appearance & Page Color')}
-            </span>
-            <div
-              role="group"
-              aria-label={tr('اختيار مظهر التطبيق', 'Choose theme mode')}
-              className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-[#e8f6ff] dark:bg-white/10"
-            >
-              {(
-                [
-                  {id: 'system', label: tr('تلقائي', 'Auto'), Icon: Monitor},
-                  {id: 'light', label: tr('نهاري', 'Light'), Icon: Sun},
-                  {id: 'dark', label: tr('ليلي', 'Dark'), Icon: Moon},
-                ] as const
-              ).map(({id, label, Icon}) => {
-                const active = themeMode === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => applyThemeMode(id)}
-                    className={`min-h-[36px] px-2 py-1 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 whitespace-nowrap transition-colors ${
-                      active
-                        ? 'bg-[#006a46] text-white shadow-xs'
-                        : 'text-[#3e4a42] dark:text-slate-300 hover:bg-white/60 dark:hover:bg-white/5'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5 shrink-0" />
-                    <span>{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center justify-between gap-1 px-1 pt-0.5">
-              {PAGE_COLOR_OPTIONS.map((opt) => {
-                const selected = pageColor === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    aria-label={isEn ? opt.labelEn : opt.labelAr}
-                    title={isEn ? opt.labelEn : opt.labelAr}
-                    aria-pressed={selected}
-                    onClick={() => {
-                      setPageColor(opt.id);
-                      notify(tr(`لون الصفحة: ${opt.labelAr}`, `Page color: ${opt.labelEn}`));
-                    }}
-                    className={`w-7 h-7 rounded-full border overflow-hidden flex transition-transform ${
-                      selected
-                        ? 'ring-2 ring-[#006a46] ring-offset-1 scale-110 border-[#006a46]'
-                        : 'border-slate-300 dark:border-white/25 hover:scale-105'
-                    }`}
-                  >
-                    <span className="w-1/2 h-full" style={{backgroundColor: opt.lightHex}} />
-                    <span className="w-1/2 h-full" style={{backgroundColor: opt.darkHex}} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Permanent Button: المنبّه الدعوي والإعدادات */}
-          <button
-            type="button"
-            onClick={() => handleOpenSettingsTab('settings')}
-            className="w-full min-h-[40px] px-3 py-2 rounded-xl bg-[#fffbf2] dark:bg-[#1a2921] hover:bg-[#ffdea8]/60 border border-[#f2be5e]/35 text-xs font-extrabold text-[#7c5800] dark:text-[#ffdea8] flex items-center justify-between transition-colors"
-          >
-            <span className="flex items-center gap-2 truncate">
-              <BellRing className="w-4 h-4 shrink-0" />
-              <span className="truncate">{tr('المنبّه الدعوي والإعدادات', 'Reminder & Settings')}</span>
-            </span>
-            {reminderSettings.enabled && (
-              <span className="w-2 h-2 rounded-full bg-[#008559] shrink-0" aria-hidden="true" />
-            )}
-          </button>
-
           <button
             type="button"
             onClick={() => setActiveTab('splash')}
@@ -2484,42 +2761,13 @@ export default function App() {
             <span>{tr('معاينة شاشة البداية', 'Welcome Screen')}</span>
             <Sparkles className="w-4 h-4" />
           </button>
-
-          {/* Single Unified Bookmarks Box Placed Last */}
-          <button
-            type="button"
-            onClick={() => navigateTo('bookmarks')}
-            className={`w-full min-h-[44px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-between transition-colors ${
-              activeTab === 'bookmarks'
-                ? 'bg-[#006a46] text-white border-[#006a46]'
-                : 'bg-[#e8f6ff] dark:bg-[#112921] border-[#006389]/15 dark:border-white/10 text-[#0e1d25] dark:text-[#e3f3fe] hover:bg-[#d9f0ff] dark:hover:bg-[#16362b]'
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <BookmarksIcon
-                className={`w-4 h-4 shrink-0 ${
-                  activeTab === 'bookmarks' ? 'text-white' : 'text-[#006a46] dark:text-[#6cdba6]'
-                }`}
-              />
-              <span>{tr(siteConfig.navBookmarks, 'Saved Box')}</span>
-            </span>
-            <span
-              className={`px-2 py-0.5 rounded-lg text-[11px] font-extrabold tabular-nums ${
-                activeTab === 'bookmarks'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-white dark:bg-white/10 text-[#006389] dark:text-[#80cfff]'
-              }`}
-            >
-              {formatNumber(bookmarkedIds.length + bookmarkedFatwaIds.length + savedArchiveFatawa.length)}
-            </span>
-          </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <div className={`flex-1 flex flex-col min-h-[calc(100dvh-80px)] ${isEn ? 'lg:pl-64' : 'lg:pr-64'}`}>
         {/* Top Bar (Sticky) */}
-        <header className="sticky top-[40px] z-30 h-14 bg-[#FFFFFF]/95 dark:bg-[#060f0d]/95 backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10 px-3 sm:px-6 flex items-center justify-between gap-2">
+        <header className="sticky top-[40px] z-30 h-14 bg-[#FFFFFF]/95 dark:bg-[#162822]/95 backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10 px-3 sm:px-6 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
@@ -2539,9 +2787,10 @@ export default function App() {
             </button>
 
             <span className="hidden lg:inline text-sm font-bold text-[#0e1d25] dark:text-white whitespace-nowrap truncate">
-              {activeTab === 'home' && tr(`${siteConfig.navHome} والنفحات`, 'Home & Daily Reflections')}
+              {activeTab === 'home' && tr(siteConfig.navHome || 'الصفحة الرئيسية', 'Home')}
               {activeTab === 'quran' && tr('المصحف الشريف (يعمل بدون إنترنت)', 'Noble Quran (Offline Ready)')}
               {activeTab === 'wird' && tr('الورد اليومي من القرآن الكريم', 'Daily Quran Wird')}
+              {activeTab === 'quiz' && tr('الاختبار الدعوي اليومي ولوحة المتصدرين', 'Daily Dawah Quiz & Leaderboard')}
               {activeTab === 'hisn' && tr('الأذكار والأدعية الجامعة', 'Comprehensive Adhkar & Duas')}
               {activeTab === 'fatawa' &&
                 tr(`${siteConfig.fatawaTitle} · الشيخ يحيى الحجوري وكبار العلماء`, 'Scholars Fatawa · Global Archive')}
@@ -2549,11 +2798,11 @@ export default function App() {
                 tr('الأذكار والأدعية الجامعة', 'Comprehensive Adhkar & Duas')}
               {activeTab === 'library' && tr(siteConfig.sadaTitle, 'Sada Al-Khair & Scholarly Portals')}
               {activeTab === 'cards' && tr('البطاقات الدعوية الكلاسيكية', 'Classic Dawah Cards')}
-              {activeTab === 'mother-oasis' && tr('واحة الداعية الفاضلة أمي', "Mother's Oasis")}
+              {activeTab === 'mother-oasis' && tr('واحة وقصص الوالدة: أم محمد', "Mother's Stories Oasis")}
               {activeTab === 'poetry' && tr('واحة الشعر والطرائف', 'Poetry & Anecdotes Oasis')}
               {activeTab === 'archive' && tr('الأرشيف الشامل الدائم', 'Permanent AI Archive')}
               {activeTab === 'videos' && tr('المقاطع المرئية والدعوية', 'Video Library')}
-              {activeTab === 'deaf-mute' && tr('واحة الصم والبكم · بإدارة م. يونس عبد الكريم', 'Deaf & Mute Oasis')}
+              {activeTab === 'deaf-mute' && tr('واحة الصم والبكم · بإشراف إدارة القسم', 'Deaf & Mute Oasis')}
               {activeTab === 'reviews' && tr('آراء الزوار وتقييمهم', 'Visitor Reviews')}
               {activeTab === 'channels' && tr(siteConfig.channelsTitle, 'Official Channels & Community')}
               {activeTab === 'bookmarks' && tr(`${siteConfig.navBookmarks} والمفضلة`, 'Saved & Bookmarks')}
@@ -2578,7 +2827,7 @@ export default function App() {
                   if (activeTab !== 'home') setActiveTab('home');
                 }}
                 placeholder={tr('ابحث في المواعظ...', 'Search sermons...')}
-                className="w-24 sm:w-44 min-h-[36px] px-2.5 rounded-xl bg-white dark:bg-[#0d211a] border border-slate-200 dark:border-white/10 text-xs focus:outline-none focus:border-[#006a46]"
+                className="w-24 sm:w-44 min-h-[36px] px-2.5 rounded-xl bg-white dark:bg-[#223a32] border border-slate-200 dark:border-white/10 text-xs focus:outline-none focus:border-[#006a46]"
               />
             )}
 
@@ -2586,7 +2835,7 @@ export default function App() {
             <div
               role="group"
               aria-label="التحكم اليدوي بحجم الخط"
-              className="flex items-center gap-0.5 rounded-xl bg-[#eef7f3] dark:bg-[#112921] border border-emerald-700/15 p-0.5"
+              className="flex items-center gap-0.5 rounded-xl bg-[#eef7f3] dark:bg-[#28453b] border border-emerald-700/15 p-0.5"
             >
               <button
                 type="button"
@@ -2657,7 +2906,7 @@ export default function App() {
               onClick={() => setVisitorAuthModalOpen(true)}
               aria-label={visitorProfile ? visitorProfile.name : tr('تسجيل / دخول', 'Register / Sign In')}
               title={visitorProfile ? visitorProfile.name : tr('تسجيل / دخول', 'Register / Sign In')}
-              className="min-h-[36px] px-2.5 rounded-xl bg-[#eefaf3] hover:bg-[#d8efe5] dark:bg-[#112921] border border-[#006a46]/25 text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold flex items-center gap-1.5 whitespace-nowrap transition-colors max-w-[140px]"
+              className="min-h-[36px] px-2.5 rounded-xl bg-[#eefaf3] hover:bg-[#d8efe5] dark:bg-[#28453b] border border-[#006a46]/25 text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold flex items-center gap-1.5 whitespace-nowrap transition-colors max-w-[140px]"
             >
               <UserCheck className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate">
@@ -2679,13 +2928,13 @@ export default function App() {
 
             <button
               type="button"
-              onClick={handleToggleLanguage}
-              aria-label={tr('تبديل اللغة إلى الإنجليزية', 'Switch language to Arabic')}
-              title={tr('English / العربية', 'العربية / English')}
-              className="min-h-[36px] px-2.5 rounded-xl bg-[#eef7f3] hover:bg-[#d8efe5] dark:bg-[#112921] border border-emerald-700/15 text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold flex items-center gap-1 whitespace-nowrap transition-colors"
+              onClick={() => setLanguageModalOpen(true)}
+              aria-label={tr('تغيير لغة الموقع', 'Switch Site Language')}
+              title={tr('تغيير لغة الموقع', 'Switch Site Language')}
+              className="min-h-[36px] px-2.5 rounded-xl bg-[#eef7f3] hover:bg-[#d8efe5] dark:bg-[#28453b] border border-emerald-700/15 text-[#006a46] dark:text-[#6cdba6] text-xs font-extrabold flex items-center gap-1 whitespace-nowrap transition-colors"
             >
               <Globe className="w-3.5 h-3.5 shrink-0" />
-              <span>{isEn ? 'عربي' : 'EN'}</span>
+              <span>{langMeta.shortCode}</span>
             </button>
 
             {(isOfflineMode || !isOnline) && (
@@ -2706,19 +2955,23 @@ export default function App() {
               aria-label={tr('تبديل المظهر', 'Cycle theme')}
               title={
                 themeMode === 'system'
-                  ? tr('المظهر: تلقائي', 'Theme: System')
+                  ? tr('المظهر: تلقائي النظام', 'Theme: System')
                   : themeMode === 'light'
                     ? tr('المظهر: نهاري', 'Theme: Light')
-                    : tr('المظهر: ليلي', 'Theme: Dark')
+                    : themeMode === 'dark'
+                      ? tr('المظهر: ليلي', 'Theme: Dark')
+                      : tr('المظهر: حسب الشروق والغروب', 'Theme: Sunrise & Sunset')
               }
-              className="hidden sm:flex min-w-[34px] min-h-[34px] rounded-full hover:bg-[#e8f6ff] dark:hover:bg-white/10 items-center justify-center transition-colors"
+              className="flex min-w-[34px] min-h-[34px] rounded-full hover:bg-[#e8f6ff] dark:hover:bg-white/10 items-center justify-center transition-colors"
             >
               {themeMode === 'system' ? (
                 <Monitor className="w-4 h-4" />
               ) : themeMode === 'light' ? (
                 <Sun className="w-4 h-4" />
-              ) : (
+              ) : themeMode === 'dark' ? (
                 <Moon className="w-4 h-4" />
+              ) : (
+                <Sunrise className="w-4 h-4" />
               )}
             </button>
 
@@ -2733,25 +2986,32 @@ export default function App() {
           </div>
         </header>
 
-        {/* 4 Main Hubs Navigation Bar + Sub-Sections Quick Strip + Instant Back */}
-        {activeTab !== 'admin-studio' && (
+        {/* 4 Main Hubs Navigation Bar + Sub-Sections Quick Strip + Instant Back (hidden on Home to avoid duplicating Sections Gateway) */}
+        {activeTab !== 'admin-studio' && activeTab !== 'home' && (
           <nav
             dir={isEn ? 'ltr' : 'rtl'}
             aria-label={tr('الأقسام الأربعة الرئيسية والأقسام الفرعية', '4 Main Hubs & Sub-sections')}
-            className="sticky top-[96px] z-25 bg-white/95 dark:bg-[#091813]/95 backdrop-blur-md border-b border-slate-200/70 dark:border-white/10 px-2.5 sm:px-6 py-2 space-y-1.5"
+            className="sticky top-[96px] z-25 bg-white/95 dark:bg-[#1b3029]/95 backdrop-blur-md border-b border-slate-200/70 dark:border-white/10 px-2.5 sm:px-6 py-2 space-y-1.5"
           >
-            {/* Row 1: Instant Back Button + 4 Main Hubs */}
+            {/* Row 1: Instant Back Button + Home + 4 Main Hubs */}
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-              {(tabHistory.length > 0 || activeTab !== 'home') && (
-                <button
-                  type="button"
-                  onClick={navigateBack}
-                  className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#ffdea8] hover:bg-[#ffd083] text-[#271900] text-xs font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors shadow-2xs"
-                >
-                  <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-                  <span>{tr('رجوع فوري', 'Back')}</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={navigateBack}
+                className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#ffdea8] hover:bg-[#ffd083] text-[#271900] text-xs font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors shadow-2xs"
+              >
+                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                <span>{tr('رجوع فوري', 'Back')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigateTo('home')}
+                className="min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors bg-[#f4faff] dark:bg-[#223a32] text-[#0e1d25] dark:text-slate-100 border border-slate-200/70 dark:border-white/15 hover:bg-[#e2f5ec] dark:hover:bg-white/10"
+              >
+                <HomeIcon className="w-3.5 h-3.5 shrink-0" />
+                <span>{isEn ? 'Home' : 'الرئيسية'}</span>
+              </button>
 
               {mainHubs.map((hub) => {
                 const Icon = hub.Icon;
@@ -2767,7 +3027,7 @@ export default function App() {
                     className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors ${
                       isHubCurrent
                         ? 'bg-[#006a46] text-white shadow-xs'
-                        : 'bg-[#f4faff] dark:bg-[#112921] text-[#0e1d25] dark:text-slate-200 border border-slate-200/70 dark:border-white/10 hover:bg-[#e2f5ec] dark:hover:bg-white/10'
+                        : 'bg-[#f4faff] dark:bg-[#223a32] text-[#0e1d25] dark:text-slate-100 border border-slate-200/70 dark:border-white/15 hover:bg-[#e2f5ec] dark:hover:bg-white/10'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -2796,7 +3056,7 @@ export default function App() {
                     className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors ${
                       isCurrent
                         ? 'bg-[#e2f5ec] dark:bg-emerald-950/70 text-[#006a46] dark:text-[#6cdba6] border border-[#006a46]/30'
-                        : 'bg-slate-50 dark:bg-[#0d211a] text-[#3e4a42] dark:text-slate-300 border border-slate-200/70 dark:border-white/10 hover:bg-[#e8f6ff] dark:hover:bg-white/10'
+                        : 'bg-slate-50 dark:bg-[#223a32] text-[#3e4a42] dark:text-slate-300 border border-slate-200/70 dark:border-white/10 hover:bg-[#e8f6ff] dark:hover:bg-white/10'
                     }`}
                   >
                     <SubIcon className="w-3 h-3 shrink-0" />
@@ -2827,10 +3087,16 @@ export default function App() {
         )}
 
         {/* Scrollable Content */}
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 pt-6 pb-32 lg:pb-12">
+        <main
+          className={`flex-1 ${
+            activeTab === 'home'
+              ? 'px-3 sm:px-5 lg:px-6 pt-3 pb-20 lg:pb-4'
+              : 'px-4 sm:px-6 lg:px-8 pt-6 pb-32 lg:pb-12'
+          }`}
+        >
           <div className="max-w-6xl mx-auto">
             {siteAppearance.maintenanceMode && !authToken ? (
-              <section className="max-w-xl mx-auto my-12 rounded-3xl bg-white dark:bg-[#0c211a] border border-amber-500/30 p-8 text-center space-y-4 shadow-md">
+              <section className="max-w-xl mx-auto my-12 rounded-3xl bg-white dark:bg-[#223a32] border border-amber-500/30 p-8 text-center space-y-4 shadow-md">
                 <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 flex items-center justify-center mx-auto">
                   <Wrench className="w-7 h-7" />
                 </div>
@@ -2852,49 +3118,30 @@ export default function App() {
               <>
                 {activeTab === 'home' && (
                   <HomeView
-                    posts={posts}
-                    twitterQuotes={twitterQuotes}
-                    socialLinks={socialLinks}
                     appIcons={appIcons}
                     siteConfig={siteConfig}
-                    brandHandle={brandHandle}
-                    bookmarkedIds={bookmarkedIds}
-                    bookmarkedFatwaCount={bookmarkedFatwaIds.length + savedArchiveFatawa.length}
-                    likedIds={likedIds}
                     searchQuery={searchQuery}
-                    motherPrayersCount={motherPrayersCount}
-                    hasSaidAmen={hasSaidAmen}
                     nafahatMeta={nafahatMeta}
-                    isAdmin={Boolean(authToken)}
-                    onSayAmen={() => void sayAmen()}
-                    onToggleBookmark={toggleBookmark}
-                    onToggleLike={(id) => void toggleLike(id)}
+                    sectionStats={sectionStats}
                     onCopySada={(post) => void copySadaMessage(post)}
-                    onOpenPost={openPostDetail}
                     onShareCard={setShareModalPost}
                     onNavigateTab={(tab) => navigateTo(tab)}
                     onNavigateLibrary={(filter) => {
                       setLibraryInitialFilter(filter);
                       navigateTo('library');
                     }}
-                    onNavigateChannels={() => navigateTo('channels')}
                     onNavigateFatawa={() => navigateTo('fatawa')}
                     onNavigateAdhkar={() => {
                       setAdhkarInitialSection('adhkar');
                       navigateTo('adhkar');
                     }}
-                    onNavigateBookmarks={() => navigateTo('bookmarks')}
-                    onAdminAutoPost={(id) => void handleAdminAutoPost(id)}
-                    onAdminEditPost={handleAdminEditPost}
-                    onAdminToggleHidePost={(id) => void handleAdminToggleHidePost(id)}
-                    onAdminDeletePost={(id) => void handleAdminDeletePost(id)}
                     onNotify={notify}
                   />
                 )}
 
                 <Suspense
                   fallback={
-                    <div className="rounded-3xl bg-white dark:bg-[#0d211a] border border-slate-200/70 dark:border-white/10 p-10 text-center space-y-2 shadow-xs">
+                    <div className="rounded-3xl bg-white dark:bg-[#223a32] border border-slate-200/70 dark:border-white/10 p-10 text-center space-y-2 shadow-xs">
                       <RefreshCw className="w-6 h-6 animate-spin text-[#006a46] dark:text-[#6cdba6] mx-auto" />
                       <p className="text-sm font-bold text-[#006a46] dark:text-[#6cdba6]">
                         {tr('جاري فتح القسم...', 'Loading section...')}
@@ -2903,7 +3150,11 @@ export default function App() {
                   }
                 >
                 {activeTab === 'quran' && (
-                  <QuranView initialPage={quranInitialPage} onNotify={notify} />
+                  <QuranView
+                    initialPage={quranInitialPage}
+                    onShareCard={setShareModalPost}
+                    onNotify={notify}
+                  />
                 )}
 
                 {activeTab === 'wird' && (
@@ -2912,6 +3163,14 @@ export default function App() {
                       setQuranInitialPage(page);
                       navigateTo('quran');
                     }}
+                    onNotify={notify}
+                  />
+                )}
+
+                {activeTab === 'quiz' && (
+                  <DailyDawahQuizCard
+                    visitorId={visitorProfile?.id}
+                    visitorName={visitorProfile?.name}
                     onNotify={notify}
                   />
                 )}
@@ -2934,12 +3193,14 @@ export default function App() {
                   <AdhkarView
                     siteConfig={siteConfig}
                     initialSection={adhkarInitialSection}
+                    highlightedDhikrId={highlightedDhikrId}
                     motherPrayerText={siteConfig.motherPrayerText}
                     motherPrayersCount={motherPrayersCount}
                     hasSaidAmen={hasSaidAmen}
                     customAdhkar={customAdhkar}
                     onSayAmen={() => void sayAmen()}
                     reminderSettings={reminderSettings}
+                    onChangeReminderSettings={updateReminderSettings}
                     onOpenSettings={() => handleOpenSettingsTab('settings')}
                     onOpenWeeklyActivity={() => handleOpenSettingsTab('weekly-activity')}
                     onShareCard={setShareModalPost}
@@ -2971,10 +3232,14 @@ export default function App() {
                 {activeTab === 'cards' && (
                   <DawahCardsView
                     aiCards={aiDawahCards}
+                    dawahCardsMeta={dawahCardsMeta}
                     cardEngagement={cardEngagement}
                     onAiCardsChange={setAiDawahCards}
+                    onDawahCardsMetaChange={setDawahCardsMeta}
                     onCardEngaged={handleCardEngaged}
                     visitorId={visitorProfile?.id}
+                    isAdmin={Boolean(authToken)}
+                    onAdminRefreshAiCards={handleAdminRefreshDawahCards}
                     onNotify={notify}
                   />
                 )}
@@ -2986,6 +3251,8 @@ export default function App() {
                     hasPrayedForMother={hasSaidAmen}
                     onAmenMother={() => void sayAmen()}
                     onNavigate={navigateTo}
+                    onShareCard={setShareModalPost}
+                    highlightedStoryId={getInitialStoryId()}
                   />
                 )}
 
@@ -2994,8 +3261,10 @@ export default function App() {
                     poetryItems={poetryItems}
                     permanentArchive={permanentArchive}
                     initialMode="all"
+                    highlightedItemId={getInitialPoetryItemId()}
                     onPoetryUpdated={setPoetryItems}
                     onArchiveUpdated={refreshArchive}
+                    onShareCard={setShareModalPost}
                     onNotify={notify}
                   />
                 )}
@@ -3005,8 +3274,10 @@ export default function App() {
                     poetryItems={poetryItems}
                     permanentArchive={permanentArchive}
                     initialMode="permanent_archive"
+                    highlightedItemId={getInitialPoetryItemId()}
                     onPoetryUpdated={setPoetryItems}
                     onArchiveUpdated={refreshArchive}
+                    onShareCard={setShareModalPost}
                     onNotify={notify}
                   />
                 )}
@@ -3038,7 +3309,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => navigateTo('home')}
-                        className="min-h-[44px] px-5 py-2.5 rounded-xl bg-white dark:bg-[#081712] border border-slate-200 dark:border-white/10 text-sm font-bold text-[#0e1d25] dark:text-white"
+                        className="min-h-[44px] px-5 py-2.5 rounded-xl bg-white dark:bg-[#1b3029] border border-slate-200 dark:border-white/10 text-sm font-bold text-[#0e1d25] dark:text-white"
                       >
                         العودة للبوابة الرئيسية
                       </button>
@@ -3115,9 +3386,10 @@ export default function App() {
                     visitorsCount={visitorsCount}
                     onlineVisitorsCount={onlineVisitorsCount}
                     clicksCount={clicksCount}
-                    motherPrayersCount={motherPrayersCount}
+                    registeredMembersCount={registeredMembersCount}
+                    sectionStats={sectionStats}
                     initialSubTab={aboutSubTab}
-                    onOpenVisitorAuth={() => setVisitorAuthModalOpen(true)}
+                    onShareAppLink={() => void shareAppLink()}
                     onOpenAdminShield={() => (authToken ? navigateTo('admin-studio') : triggerAdminEntry())}
                     onMessageSubmitted={() => {
                       if (authToken) {
@@ -3189,6 +3461,8 @@ export default function App() {
                     visitorsCount={visitorsCount}
                     onlineVisitorsCount={onlineVisitorsCount}
                     clicksCount={clicksCount}
+                    registeredMembersCount={registeredMembersCount}
+                    dawahCardsMeta={dawahCardsMeta}
                     onPublishPost={(newPost) => setPosts((prev) => [newPost, ...prev])}
                     onUpdatePost={(updatedPost) => {
                       setPosts((prev) => prev.map((p) => (p.id === updatedPost.id ? updatedPost : p)));
@@ -3208,11 +3482,16 @@ export default function App() {
                     onUpdateSettings={handleUpdateSettings}
                     onSaveCustomization={handleSaveCustomization}
                     onRefreshNafahatAI={handleAdminRefreshNafahat}
-                    onResetCounters={(resetPosts, nextMotherCount) => {
+                    onRefreshDawahCardsAI={handleAdminRefreshDawahCardsWithResult}
+                    onResetCounters={(resetPosts, nextMotherCount, nextVisitors, nextClicks) => {
                       setPosts(resetPosts);
                       setMotherPrayersCount(nextMotherCount);
-                      setVisitorsCount(4580);
-                      setClicksCount(0);
+                      if (typeof nextVisitors === 'number') {
+                        setVisitorsCount((prev) => Math.max(prev, 4580, nextVisitors));
+                      }
+                      if (typeof nextClicks === 'number') {
+                        setClicksCount((prev) => Math.max(prev, 8540, nextClicks));
+                      }
                       setLikedIds([]);
                       setHasSaidAmen(false);
                       try {
@@ -3224,6 +3503,18 @@ export default function App() {
                     onImportState={(payload) => {
                       if (Array.isArray(payload.posts)) setPosts(payload.posts);
                       if (Array.isArray(payload.fatawa)) setFatawa(payload.fatawa);
+                      if (Array.isArray(payload.poetryItems)) setPoetryItems(payload.poetryItems);
+                      if (Array.isArray(payload.aiDawahCards)) setAiDawahCards(payload.aiDawahCards);
+                      if (payload.dawahCardsMeta) setDawahCardsMeta(payload.dawahCardsMeta);
+                      if (typeof payload.visitorsCount === 'number') {
+                        setVisitorsCount((prev) => Math.max(prev, 4580, payload.visitorsCount!));
+                      }
+                      if (typeof payload.clicksCount === 'number') {
+                        setClicksCount((prev) => Math.max(prev, 8540, payload.clicksCount!));
+                      }
+                      if (typeof payload.registeredMembersCount === 'number') {
+                        setRegisteredMembersCount((prev) => Math.max(prev, payload.registeredMembersCount!));
+                      }
                       if (Array.isArray(payload.socialLinks)) setSocialLinks(payload.socialLinks);
                       if (payload.appIcons) setAppIcons({...DEFAULT_APP_ICONS, ...payload.appIcons});
                       if (payload.siteConfig) setSiteConfig({...DEFAULT_SITE_CONFIG, ...payload.siteConfig});
@@ -3246,6 +3537,11 @@ export default function App() {
                     onCustomBooksChange={setCustomBooks}
                     sadaMaterials={sadaMaterials}
                     onSadaMaterialsChange={setSadaMaterials}
+                    aiDawahCards={aiDawahCards}
+                    onAiDawahCardsChange={setAiDawahCards}
+                    onDawahCardsMetaChange={setDawahCardsMeta}
+                    poetryItems={poetryItems}
+                    onPoetryItemsChange={setPoetryItems}
                     meetConfig={meetConfig}
                     onMeetConfigChange={setMeetConfig}
                     onPreviewSite={() => navigateTo('home')}
@@ -3257,62 +3553,42 @@ export default function App() {
               </>
             )}
 
-            {/* Site Attribution, Online Presence & Official Islamic Disclaimer Footer */}
+            {/* Compact Footer with Broadcast Channels (WhatsApp, Telegram, X) & Online Stats */}
             {activeTab !== 'admin-studio' && (
-              <>
-                <div className="mt-10 pt-5 border-t border-slate-200/80 dark:border-white/10">
-                  <div className="rounded-2xl bg-white/85 dark:bg-[#091813] border border-slate-200/70 dark:border-white/10 px-5 py-4 text-center space-y-3 shadow-xs">
-                    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs font-semibold text-[#006a46] dark:text-[#6cdba6]">
-                      <span>{displayAppName}</span>
-                      <span aria-hidden="true" className="text-slate-400">·</span>
-                      <span dir="ltr">{brandHandle}</span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-center gap-3">
-                      <div className="rounded-xl bg-[#f4faff] dark:bg-[#112921] border border-slate-200/70 dark:border-white/10 px-3.5 py-1.5 flex items-center gap-2 text-xs">
-                        <Eye className="w-4 h-4 text-[#006a46] dark:text-[#6cdba6] shrink-0" />
-                        <span className="text-[#3e4a42] dark:text-slate-300 font-semibold">
-                          {tr('زوار الخادم:', 'Server Visits:')}
-                        </span>
-                        <span className="font-extrabold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
-                          {formatNumber(visitorsCount)}
-                        </span>
-                      </div>
-
-                      <div className="rounded-xl bg-[#eefaf3] dark:bg-[#0d241b] border border-[#008559]/25 dark:border-[#6cdba6]/20 px-3.5 py-1.5 flex items-center gap-2 text-xs">
-                        <span
-                          className="w-2 h-2 rounded-full bg-[#008559] animate-pulse shrink-0"
-                          aria-hidden="true"
-                        />
-                        <Users className="w-4 h-4 text-[#008559] dark:text-[#6cdba6] shrink-0" />
-                        <span className="text-[#3e4a42] dark:text-slate-300 font-semibold">
-                          {tr('الموجودين الآن:', 'Online Now:')}
-                        </span>
-                        <span className="font-extrabold text-[#006a46] dark:text-[#6cdba6] tabular-nums">
-                          {formatNumber(onlineVisitorsCount)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <SiteFooter
-                  onAdminTrigger={() => (authToken ? navigateTo('admin-studio') : triggerAdminEntry())}
-                />
-              </>
+              <SiteFooter
+                socialLinks={socialLinks}
+                visitorsCount={visitorsCount}
+                clicksCount={clicksCount}
+                onlineVisitorsCount={onlineVisitorsCount}
+                onNavigateChannels={() => navigateTo('channels')}
+                onAdminTrigger={() => (authToken ? navigateTo('admin-studio') : triggerAdminEntry())}
+              />
             )}
           </div>
         </main>
       </div>
 
-      {/* Mobile Bottom Tab Bar (4 Main Hubs + 40px Android Bottom Safe Area) */}
+      {/* Mobile Bottom Tab Bar (Main Hubs + 40px Android Bottom Safe Area) */}
       <nav
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 pb-safe bg-[#FFFFFF]/95 dark:bg-[#091813]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/10"
-        aria-label={tr('الأقسام الأربعة الرئيسية', '4 Main Hubs Bottom Navigation')}
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 pb-safe bg-[#FFFFFF]/95 dark:bg-[#1b3029]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/10"
+        aria-label={tr('الأقسام الرئيسية', 'Main Hubs Bottom Navigation')}
       >
-        <div className="h-16 grid grid-cols-4 items-center px-1">
+        <div className="h-16 grid grid-cols-6 items-center px-1">
+          <button
+            type="button"
+            onClick={() => navigateTo('home')}
+            className={`min-h-[44px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              activeTab === 'home' ? 'text-[#006a46] dark:text-[#6cdba6] font-extrabold' : 'text-[#3e4a42] dark:text-slate-300'
+            }`}
+          >
+            <HomeIcon className="w-5 h-5" />
+            <span className="text-[10px] whitespace-nowrap truncate max-w-[56px]">
+              {isEn ? 'Home' : 'الرئيسية'}
+            </span>
+          </button>
           {mainHubs.map((hub) => {
             const Icon = hub.Icon;
-            const isCurrent = activeHubId === hub.id;
+            const isCurrent = activeTab !== 'home' && activeHubId === hub.id;
             return (
               <button
                 key={hub.id}
@@ -3322,11 +3598,11 @@ export default function App() {
                   navigateTo(hub.defaultTab);
                 }}
                 className={`min-h-[44px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-                  isCurrent ? 'text-[#006a46] dark:text-[#6cdba6] font-extrabold' : 'text-[#3e4a42] dark:text-slate-400'
+                  isCurrent ? 'text-[#006a46] dark:text-[#6cdba6] font-extrabold' : 'text-[#3e4a42] dark:text-slate-300'
                 }`}
               >
                 <Icon className="w-5 h-5" />
-                <span className="text-[10px] whitespace-nowrap truncate max-w-[82px]">{hub.shortLabel}</span>
+                <span className="text-[10px] whitespace-nowrap truncate max-w-[56px]">{hub.shortLabel}</span>
               </button>
             );
           })}
@@ -3341,7 +3617,7 @@ export default function App() {
           onClick={() => setMoreSheetOpen(false)}
         >
           <div
-            className="w-[88vw] max-w-sm h-full rounded-e-3xl bg-white dark:bg-[#0b2119] p-5 pb-12 space-y-4 shadow-2xl overflow-y-auto"
+            className="w-[88vw] max-w-sm h-full rounded-e-3xl bg-white dark:bg-[#223a32] p-5 pb-12 space-y-4 shadow-2xl overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-white/10 pb-3">
@@ -3359,68 +3635,26 @@ export default function App() {
             </div>
 
             <div className="space-y-3">
-              {/* Mobile Manual Font Size Controls + Slider */}
-              <div className="rounded-2xl bg-[#eef7f3] dark:bg-[#112921] p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-[#0e1d25] dark:text-white">
-                    تعديل حجم خط التطبيق يدوياً
-                  </span>
-                  <span className="px-2 py-0.5 rounded-lg bg-[#006a46] text-white text-[11px] font-extrabold tabular-nums">
-                    {activeFontSizePx}px
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={MIN_FONT_SIZE_PX}
-                  max={MAX_FONT_SIZE_PX}
-                  step={1}
-                  value={activeFontSizePx}
-                  onChange={(e) => setCustomFontSizePx(Number(e.target.value))}
-                  aria-label="تعديل حجم الخط يدوياً"
-                  className="w-full accent-[#006a46] cursor-pointer"
-                />
-                <div className="flex items-center justify-between gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      stepFontSize('up');
-                      notify('تم تكبير الخط');
-                    }}
-                    className="flex-1 min-h-[34px] px-2 rounded-xl bg-white dark:bg-[#091813] text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6]"
-                  >
-                    A+ تكبير
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      stepFontSize('reset');
-                      notify('تم ضبط الخط المتوسط الافتراضي');
-                    }}
-                    className="flex-1 min-h-[34px] px-2 rounded-xl bg-[#006a46] text-white text-xs font-extrabold"
-                  >
-                    افتراضي ({DEFAULT_FONT_SIZE_PX}px)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      stepFontSize('down');
-                      notify('تم تصغير الخط');
-                    }}
-                    className="flex-1 min-h-[34px] px-2 rounded-xl bg-white dark:bg-[#091813] text-xs font-extrabold text-[#006a46] dark:text-[#6cdba6]"
-                  >
-                    A- تصغير
-                  </button>
-                </div>
-              </div>
-
               {/* Main Hubs & Quick Sub-Sections in Mobile Drawer */}
               <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => navigateTo('home')}
+                  className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition-colors ${
+                    activeTab === 'home'
+                      ? 'bg-[#006a46] text-white'
+                      : 'bg-[#f4faff] dark:bg-[#223a32] text-[#006a46] dark:text-[#6cdba6] border border-slate-200/60 dark:border-white/15'
+                  }`}
+                >
+                  <HomeIcon className="w-4 h-4 shrink-0" />
+                  <span>{tr('الصفحة الرئيسية', 'Home')}</span>
+                </button>
                 {mainHubs.map((hub) => {
                   const HubIcon = hub.Icon;
                   return (
                     <div
                       key={hub.id}
-                      className="rounded-2xl bg-[#f4faff] dark:bg-[#112921] p-3 space-y-2 border border-slate-200/60 dark:border-white/10"
+                      className="rounded-2xl bg-[#f4faff] dark:bg-[#28453b] p-3 space-y-2 border border-slate-200/60 dark:border-white/10"
                     >
                       <button
                         type="button"
@@ -3446,7 +3680,7 @@ export default function App() {
                               className={`min-h-[38px] px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 text-start ${
                                 isSubItemCurrent(sub)
                                   ? 'bg-[#006a46] text-white'
-                                  : 'bg-white dark:bg-[#091813] text-[#0e1d25] dark:text-slate-200'
+                                  : 'bg-white dark:bg-[#1b3029] text-[#0e1d25] dark:text-slate-200'
                               }`}
                             >
                               <SubIcon className="w-3.5 h-3.5 shrink-0" />
@@ -3488,148 +3722,12 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   setMoreSheetOpen(false);
-                  setVisitorAuthModalOpen(true);
-                }}
-                className="w-full min-h-[46px] px-4 py-2.5 rounded-2xl bg-[#eefaf3] dark:bg-[#112921] border border-[#006a46]/25 text-sm font-extrabold flex items-center justify-between text-[#006a46] dark:text-[#6cdba6]"
-              >
-                <span className="flex items-center gap-3 truncate">
-                  <UserCheck className="w-5 h-5 shrink-0" />
-                  <span className="truncate">
-                    {visitorProfile ? visitorProfile.name : tr('تسجيل / دخول', 'Register / Sign In')}
-                  </span>
-                </span>
-                <span className="text-xs px-2.5 py-0.5 rounded-lg bg-[#006a46] text-white shrink-0">
-                  {visitorProfile ? tr('مسجّل', 'Signed In') : tr('دخول', 'Sign In')}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  handleToggleLanguage();
-                  setMoreSheetOpen(false);
-                }}
-                className="w-full min-h-[46px] px-4 py-2.5 rounded-2xl bg-[#fffbf2] dark:bg-[#1a2921] border border-[#f2be5e]/45 text-sm font-bold flex items-center justify-between text-[#7c5800] dark:text-[#ffdea8]"
-              >
-                <span className="flex items-center gap-3">
-                  <Globe className="w-5 h-5" />
-                  <span>{tr('تغيير لغة الموقع', 'Switch Site Language')}</span>
-                </span>
-                <span>{isEn ? 'العربية' : 'English'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreSheetOpen(false);
-                  handleOpenSettingsTab('settings');
-                }}
-                className="w-full min-h-[46px] px-4 py-2.5 rounded-2xl bg-[#e8f6ff] dark:bg-[#112921] text-sm font-bold flex items-center justify-between text-[#006a46] dark:text-[#6cdba6]"
-              >
-                <span className="flex items-center gap-3">
-                  <BellRing className="w-5 h-5" />
-                  <span>{tr('المنبّه الدعوي والإعدادات', 'Reminder & Settings')}</span>
-                </span>
-                <span className="text-xs">
-                  {reminderSettings.enabled ? tr('مفعّل', 'On') : tr('ضبط', 'Configure')}
-                </span>
-              </button>
-
-              <PWAInstallButton
-                variant="box"
-                onNotify={notify}
-                onShareAppLink={() => void shareAppLink()}
-                onAfterAction={() => setMoreSheetOpen(false)}
-              />
-
-              <div className="rounded-2xl bg-[#e8f6ff] dark:bg-[#112921] p-3.5 space-y-2.5">
-                <span className="text-xs font-bold text-[#3e4a42] dark:text-slate-300 block">
-                  {tr('إعدادات المظهر ولون الصفحة (تلقائي / نهاري / ليلي)', 'Theme & Page Color (Auto / Light / Dark)')}
-                </span>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(
-                    [
-                      {id: 'system', label: tr('تلقائي', 'Auto'), Icon: Monitor},
-                      {id: 'light', label: tr('نهاري', 'Light'), Icon: Sun},
-                      {id: 'dark', label: tr('ليلي', 'Dark'), Icon: Moon},
-                    ] as const
-                  ).map(({id, label, Icon}) => {
-                    const active = themeMode === id;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => applyThemeMode(id)}
-                        className={`min-h-[42px] px-2.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
-                          active
-                            ? 'bg-[#006a46] text-white'
-                            : 'bg-white dark:bg-[#0a1914] text-[#3e4a42] dark:text-slate-300'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4 shrink-0" />
-                        <span>{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="grid grid-cols-3 gap-1.5 pt-1">
-                  {PAGE_COLOR_OPTIONS.map((opt) => {
-                    const selected = pageColor === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        aria-pressed={selected}
-                        onClick={() => {
-                          setPageColor(opt.id);
-                          notify(tr(`تم تغيير لون الصفحة إلى: ${opt.labelAr}`, `Page color changed: ${opt.labelEn}`));
-                        }}
-                        className={`rounded-xl px-2 py-1.5 border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${
-                          selected
-                            ? 'border-[#006a46] bg-[#006a46]/15 text-[#006a46] dark:text-[#6cdba6]'
-                            : 'border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#0a1914] text-[#3e4a42] dark:text-slate-300'
-                        }`}
-                      >
-                        <span
-                          className="w-4 h-4 rounded-full border border-slate-300 dark:border-white/25 overflow-hidden flex shrink-0"
-                          aria-hidden="true"
-                        >
-                          <span className="w-1/2 h-full" style={{backgroundColor: opt.lightHex}} />
-                          <span className="w-1/2 h-full" style={{backgroundColor: opt.darkHex}} />
-                        </span>
-                        <span className="truncate">{isEn ? opt.labelEn : opt.labelAr}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreSheetOpen(false);
                   setActiveTab('splash');
                 }}
-                className="w-full min-h-[46px] px-4 py-2.5 rounded-2xl bg-[#e8f6ff] dark:bg-[#112921] text-sm font-semibold flex items-center gap-3"
+                className="w-full min-h-[44px] px-4 py-2 rounded-2xl bg-[#e8f6ff] dark:bg-[#28453b] text-xs font-semibold flex items-center gap-2.5"
               >
-                <Sparkles className="w-5 h-5 text-[#7c5800] dark:text-[#f2be5e]" />
-                <span>{tr('إعادة عرض شاشة البداية', 'Show Welcome Screen')}</span>
-              </button>
-
-              {/* Single Unified Bookmarks Box Placed Last */}
-              <button
-                type="button"
-                onClick={() => navigateTo('bookmarks')}
-                className="w-full min-h-[50px] px-4 py-3 rounded-2xl bg-[#f4faff] dark:bg-[#112921] border border-[#006389]/20 dark:border-white/15 text-sm font-bold flex items-center justify-between"
-              >
-                <span className="flex items-center gap-3">
-                  <BookmarksIcon className="w-5 h-5 text-[#006a46] dark:text-[#6cdba6]" />
-                  <span>{tr(`${siteConfig.navBookmarks} (مربع المحفوظات الموحد)`, 'Saved & Bookmarks')}</span>
-                </span>
-                <span className="px-2.5 py-0.5 rounded-lg bg-white dark:bg-white/10 text-xs font-extrabold text-[#006389] dark:text-[#80cfff] tabular-nums">
-                  {formatNumber(bookmarkedIds.length + bookmarkedFatwaIds.length + savedArchiveFatawa.length)}
-                </span>
+                <Sparkles className="w-4 h-4 text-[#7c5800] dark:text-[#f2be5e]" />
+                <span>{tr('معاينة شاشة البداية', 'Show Welcome Screen')}</span>
               </button>
             </div>
           </div>
@@ -3645,7 +3743,7 @@ export default function App() {
           <form
             onSubmit={(e) => void submitAdminLogin(e)}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#0c211a] p-6 shadow-2xl space-y-4"
+            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#223a32] p-6 shadow-2xl space-y-4"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -3676,7 +3774,7 @@ export default function App() {
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
                 placeholder={tr('اسم المستخدم', 'Username')}
-                className="w-full min-h-[46px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                className="w-full min-h-[46px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#006a46]"
               />
               <input
                 type="password"
@@ -3684,7 +3782,7 @@ export default function App() {
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 placeholder={tr('كلمة المرور', 'Password')}
-                className="w-full min-h-[46px] rounded-xl bg-[#e8f6ff] dark:bg-[#112921] px-4 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#006a46]"
+                className="w-full min-h-[46px] rounded-xl bg-[#e8f6ff] dark:bg-[#28453b] px-4 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#006a46]"
               />
             </div>
 
@@ -3706,8 +3804,24 @@ export default function App() {
         open={visitorAuthModalOpen}
         visitor={visitorProfile}
         onClose={() => setVisitorAuthModalOpen(false)}
-        onSignedIn={(profile) => {
+        onSignedIn={(profile, opts) => {
           setVisitorProfile(profile);
+          if (opts) {
+            saveLocalTelemetryFloors({
+              visitorsCount: opts.visitorsCount,
+              clicksCount: opts.clicksCount,
+              registeredMembersCount: opts.registeredMembersCount,
+            });
+            if (typeof opts.visitorsCount === 'number') {
+              setVisitorsCount((prev) => Math.max(prev, 4580, opts.visitorsCount!));
+            }
+            if (typeof opts.clicksCount === 'number') {
+              setClicksCount((prev) => Math.max(prev, 8540, opts.clicksCount!));
+            }
+            if (typeof opts.registeredMembersCount === 'number') {
+              setRegisteredMembersCount((prev) => Math.max(prev, opts.registeredMembersCount!));
+            }
+          }
           if (Array.isArray(profile.bookmarkedPostIds) && profile.bookmarkedPostIds.length > 0) {
             setBookmarkedIds((prev) => Array.from(new Set([...prev, ...profile.bookmarkedPostIds!])));
           }
@@ -3716,6 +3830,9 @@ export default function App() {
           }
           if (Array.isArray(profile.likedPostIds) && profile.likedPostIds.length > 0) {
             setLikedIds((prev) => Array.from(new Set([...prev, ...profile.likedPostIds!])));
+          }
+          if (profile.quizProgress) {
+            mergeRemoteQuizState(profile.quizProgress);
           }
           void cloudFetchVisitorProfile().then((cloudProf) => {
             if (!cloudProf) return;
@@ -3729,8 +3846,23 @@ export default function App() {
               setLikedIds((prev) => Array.from(new Set([...prev, ...cloudProf.likedPostIds!])));
             }
           });
+          const persist = opts?.rememberMe !== false;
           try {
-            window.localStorage.setItem(VISITOR_PROFILE_KEY, JSON.stringify(profile));
+            if (persist) {
+              window.localStorage.setItem(VISITOR_PROFILE_KEY, JSON.stringify(profile));
+              if (opts?.sessionToken) {
+                window.localStorage.setItem(VISITOR_SESSION_TOKEN_KEY, opts.sessionToken);
+              }
+              window.sessionStorage.removeItem(VISITOR_PROFILE_KEY);
+              window.sessionStorage.removeItem(VISITOR_SESSION_TOKEN_KEY);
+            } else {
+              window.sessionStorage.setItem(VISITOR_PROFILE_KEY, JSON.stringify(profile));
+              if (opts?.sessionToken) {
+                window.sessionStorage.setItem(VISITOR_SESSION_TOKEN_KEY, opts.sessionToken);
+              }
+              window.localStorage.removeItem(VISITOR_PROFILE_KEY);
+              window.localStorage.removeItem(VISITOR_SESSION_TOKEN_KEY);
+            }
           } catch {
             // ignore
           }
@@ -3739,11 +3871,25 @@ export default function App() {
           setVisitorProfile(null);
           try {
             window.localStorage.removeItem(VISITOR_PROFILE_KEY);
+            window.localStorage.removeItem(VISITOR_SESSION_TOKEN_KEY);
+            window.sessionStorage.removeItem(VISITOR_PROFILE_KEY);
+            window.sessionStorage.removeItem(VISITOR_SESSION_TOKEN_KEY);
           } catch {
             // ignore
           }
         }}
         onNotify={notify}
+      />
+
+      {/* Multi-Language Site Picker Modal */}
+      <LanguagePickerModal
+        open={languageModalOpen}
+        onClose={() => setLanguageModalOpen(false)}
+        onSelect={(code) => {
+          setLang(code);
+          const meta = getLanguageMeta(code);
+          notify(`تم تغيير لغة الموقع إلى: ${meta.nativeName} (${meta.arabicLabel})`);
+        }}
       />
 
       {/* Grounded In-App AI Assistant Chatbot & Direct Admin Inbox Submission */}
@@ -3775,13 +3921,20 @@ export default function App() {
         initialSection={settingsInitialSection}
         onClose={() => setSettingsModalOpen(false)}
         appName={displayAppName}
+        customAdhkar={customAdhkar}
         reminderSettings={reminderSettings}
         onChangeReminderSettings={updateReminderSettings}
         themeMode={themeMode}
         onChangeThemeMode={applyThemeMode}
+        solarWindow={solarWindow}
+        onRequestSolarLocation={handleRequestSolarLocation}
+        solarLocating={solarLocating}
         onToggleLanguage={handleToggleLanguage}
-        onOpenAdhkar={() => {
+        onOpenAdhkar={(dhikrId) => {
           setAdhkarInitialSection('adhkar');
+          if (dhikrId) {
+            setHighlightedDhikrId(dhikrId);
+          }
           navigateTo('adhkar');
         }}
         onNotify={notify}
@@ -3797,7 +3950,7 @@ export default function App() {
 
       {/* In-App External Site Portal Overlay with Permanent Return & Home Navigation */}
       {externalPortal && (
-        <div className="fixed inset-0 z-50 pt-[40px] pb-[40px] bg-white dark:bg-[#060f0d] flex flex-col">
+        <div className="fixed inset-0 z-50 pt-[40px] pb-[40px] bg-white dark:bg-[#162822] flex flex-col">
           <div className="bg-[#006a46] text-white px-3 sm:px-5 py-2.5 flex flex-wrap items-center justify-between gap-2 shadow-md">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -3838,7 +3991,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="bg-[#fffbf2] dark:bg-[#112921] border-b border-amber-500/25 px-4 py-1.5 text-[11px] sm:text-xs font-semibold text-[#7c5800] dark:text-[#ffdea8] flex flex-wrap items-center justify-between gap-2">
+          <div className="bg-[#fffbf2] dark:bg-[#28453b] border-b border-amber-500/25 px-4 py-1.5 text-[11px] sm:text-xs font-semibold text-[#7c5800] dark:text-[#ffdea8] flex flex-wrap items-center justify-between gap-2">
             <span>
               أنت الآن تتصفح موقعاً خارجياً داخل منصة مواعظ وعبر — يمكنك الضغط على «عودة للرئيسية» في أي لحظة. إذا منع الموقع الخارجي العرض المدمج، اضغط «فتح في المتصفح».
             </span>
@@ -3855,7 +4008,7 @@ export default function App() {
 
       {/* Toast Notification */}
       {toastMsg && (
-        <div className="fixed bottom-[116px] lg:bottom-14 left-4 right-4 max-w-md mx-auto z-50 rounded-2xl bg-[#23323b] dark:bg-[#0e2d22] text-white px-4 py-3 shadow-xl flex items-center gap-2.5">
+        <div className="fixed bottom-[116px] lg:bottom-14 left-4 right-4 max-w-md mx-auto z-50 rounded-2xl bg-[#23323b] dark:bg-[#27443a] text-white px-4 py-3 shadow-xl flex items-center gap-2.5">
           <CheckCircle2 className="w-5 h-5 text-[#6cdba6] shrink-0" />
           <span className="text-xs sm:text-sm font-medium flex-1">{toastMsg}</span>
         </div>
